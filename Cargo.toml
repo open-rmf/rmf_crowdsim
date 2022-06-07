@@ -1,0 +1,6 @@
+[workspace]
+resolver="2"
+members = [
+  "rmf_crowdsim",
+  "rmf_crowdsim_viz"
+]

@@ -1,0 +1,10 @@
+[package]
+name = "rmf_crowdsim_viz"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rmf_crowdsim = { path = "../rmf_crowdsim"}
+nannou = "0.18.1"
