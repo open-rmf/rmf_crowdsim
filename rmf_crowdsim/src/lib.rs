@@ -1,8 +1,13 @@
 use std::sync::{Arc, Mutex};
-
 use std::collections::HashMap;
 pub extern crate nalgebra as na;
 use na::Vector2;
+
+pub mod local_planners;
+pub mod map_representation;
+
+pub use crate::map_representation::map::Map;
+pub use crate::local_planners::local_planner::LocalPlanner;
 
 /// Agent  ID
 pub type AgentId = usize;
@@ -22,10 +27,6 @@ pub struct Agent {
     pub angular_vel: f64
 }
 
-/// Abstract interface for map representation.
-pub trait Map {
-    fn get_occupancy(&self, position: Point) -> Option<bool>;
-}
 
 /// Abstract interface for planners
 pub trait HighLevelPlanner<M :Map> {
@@ -42,10 +43,6 @@ pub trait HighLevelPlanner<M :Map> {
     fn set_map(&mut self, map: Arc<M>);
 }
 
-pub trait LocalPlanner<M: Map> {
-    fn get_desired_velocity(
-        &self, agent: &Agent, recommended_velocity: Vec2f, map: Arc<M>) -> Vec2f;
-}
 
 pub struct Simulation<M: Map> {
     pub agents: Vec<Agent>,

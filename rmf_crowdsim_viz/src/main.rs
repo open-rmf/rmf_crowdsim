@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 use rmf_crowdsim::*;
+use rmf_crowdsim::local_planners::no_local_plan::NoLocalPlan;
 use nannou::prelude::*;
 
 struct NoMap {}
@@ -48,15 +49,6 @@ impl<M: Map> HighLevelPlanner<M> for NaiveHighLevelPlan
     fn set_map(&mut self, map: Arc<M>)
     {
         // Do nothing
-    }
-}
-
-struct NoLocalPlan{}
-
-impl<M: Map> LocalPlanner<M> for NoLocalPlan {
-    fn get_desired_velocity(&self, agent: &Agent, recommended_velocity: Vec2f, map: Arc<M>) -> Vec2f
-    {
-        recommended_velocity
     }
 }
 
