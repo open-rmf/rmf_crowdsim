@@ -16,10 +16,10 @@ pub type Vec2f = Vector2<f64>;
 /// Data representing an individual agent
 pub struct Agent {
     agent_id : AgentId,
-    position : Point,
-    orientation: f64,
-    velocity: Vector2<f64>,
-    angular_vel: f64
+    pub position : Point,
+    pub orientation: f64,
+    pub velocity: Vector2<f64>,
+    pub angular_vel: f64
 }
 
 /// Abstract interface for map representation.
@@ -30,7 +30,6 @@ pub trait Map {
 /// Abstract interface for planners
 pub trait HighLevelPlanner<M :Map> {
 
-    /// Gets the desired velocity given an agent. If the plan has completed return None
     fn get_desired_velocity(&mut self, agent: &Agent, time: std::time::Duration) -> Option<Vec2f>;
 
     /// Set the target position for a given agent
@@ -44,20 +43,21 @@ pub trait HighLevelPlanner<M :Map> {
 }
 
 pub trait LocalPlanner<M: Map> {
-    fn get_desired_velocity(&self, agent: &Agent, recommended_velocity: Vec2f, map: Arc<M>) -> Vec2f;
+    fn get_desired_velocity(
+        &self, agent: &Agent, recommended_velocity: Vec2f, map: Arc<M>) -> Vec2f;
 }
 
-pub struct Simulation<M: Map, H: HighLevelPlanner<M>, L: LocalPlanner<M>> {
-    agents: Vec<Agent>,
+pub struct Simulation<M: Map> {
+    pub agents: Vec<Agent>,
     map: Arc<M>,
-    high_level_planner: HashMap<AgentId, Arc<Mutex<H>>>,
-    local_planner: HashMap<AgentId, Arc<L>>,
+    high_level_planner: HashMap<AgentId, Arc<Mutex<dyn HighLevelPlanner<M>>>>,
+    local_planner: HashMap<AgentId, Arc<dyn LocalPlanner<M>>>,
     sim_time: std::time::Duration
 }
 
-impl<M: Map, H: HighLevelPlanner<M>, L: LocalPlanner<M>> Simulation<M,H,L> {
+impl<M: Map> Simulation<M> {
 
-    fn new(map: Arc<M>) -> Self
+    pub fn new(map: Arc<M>) -> Self
     {
         Self {
             agents: vec!(),
@@ -68,17 +68,17 @@ impl<M: Map, H: HighLevelPlanner<M>, L: LocalPlanner<M>> Simulation<M,H,L> {
         }
     }
 
-    fn add_agents(
+    pub fn add_agents(
         &mut self,
         spawn_positions: &Vec<Point>,
-        high_level_planner: Arc<Mutex<H>>,
-        local_planner: Arc<L>) -> Vec<AgentId>
+        high_level_planner: Arc<Mutex<dyn HighLevelPlanner<M>>>,
+        local_planner: Arc<dyn LocalPlanner<M>>) -> Vec<AgentId>
     {
         let mut res = Vec::<AgentId>::new();
         for x in spawn_positions
         {
             let agent_id = self.agents.len();
-            /// HUGE RED FLAGS
+            // HUGE RED FLAGS
             high_level_planner.lock().unwrap().set_map(self.map.clone());
             self.high_level_planner.insert(agent_id, high_level_planner.clone());
             self.local_planner.insert(agent_id, local_planner.clone());
@@ -98,30 +98,31 @@ impl<M: Map, H: HighLevelPlanner<M>, L: LocalPlanner<M>> Simulation<M,H,L> {
 
     pub fn step (&mut self, dur: std::time::Duration)
     {
-        for x in 0..self.agents.len()-1
+        for x in 0..self.agents.len()
         {
             let agent_id = self.agents[x].agent_id;
 
-            /// Execute the high level plan
+            // Execute the high level plan
             let mut vel = Vec2f::new(0f64, 0f64);
             if let Some(lock) = self.high_level_planner.get(&agent_id) {
                 let result  =
                     lock.lock().unwrap().get_desired_velocity(&self.agents[x], self.sim_time);
                 if let Some(res) = result
                 {
-                    vel += res;
+                    vel = res;
                 }
             }
 
-
+            // Execute the local
             if let Some(local_planner) = self.local_planner.get(&agent_id) {
-                local_planner.get_desired_velocity(&self.agents[x], vel, self.map.clone());
+                vel = local_planner.get_desired_velocity(&self.agents[x], vel, self.map.clone());
             }
 
-            // Convert duration to nano seconds
-            self.agents[x].position = self.agents[x].position + self.agents[x].velocity;
+            // Agent position
+            let dx = vel * dur.as_secs_f64();
+            self.agents[x].position += dx;
+            self.agents[x].velocity = vel;
         }
     }
-
-
 }
+
