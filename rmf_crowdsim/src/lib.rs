@@ -5,14 +5,19 @@ use na::Vector2;
 
 pub mod local_planners;
 pub mod map_representation;
+pub mod spatial_index;
+pub mod highlevel_planners;
 
 pub use crate::map_representation::map::Map;
 pub use crate::local_planners::local_planner::LocalPlanner;
+pub use crate::spatial_index::spatial_index::SpatialIndex;
+pub use crate::highlevel_planners::highlevel_planners::HighLevelPlanner;
 
 /// Agent  ID
 pub type AgentId = usize;
 
 /// Point
+/// TODO(arjo) Make generic so we support lifts and multilevels
 pub type Point = Vector2<f64>;
 
 /// 2-vector
@@ -20,45 +25,40 @@ pub type Vec2f = Vector2<f64>;
 
 /// Data representing an individual agent
 pub struct Agent {
+    /// Unique Agent ID
     agent_id : AgentId,
+    /// Position of a point
     pub position : Point,
+    /// Orientation of agent
     pub orientation: f64,
+    /// Velocity of agent
     pub velocity: Vector2<f64>,
+    /// Angular velocity of agent
     pub angular_vel: f64
 }
 
-
-/// Abstract interface for planners
-pub trait HighLevelPlanner<M :Map> {
-
-    fn get_desired_velocity(&mut self, agent: &Agent, time: std::time::Duration) -> Option<Vec2f>;
-
-    /// Set the target position for a given agent
-    fn set_target(&mut self, agent: &Agent, point: Point, tolerance: Vec2f);
-
-    /// Remove an agent
-    fn remove_agent_id(&mut self, agent: AgentId);
-
-
-    fn set_map(&mut self, map: Arc<M>);
-}
-
-
-pub struct Simulation<M: Map> {
+/// A representation of a simulation session
+pub struct Simulation<M: Map, T: SpatialIndex> {
+    /// List of all active agents
     pub agents: Vec<Agent>,
+    /// Spatial Index. Used internally to
+    spatial_index: T,
+    /// Map ARC
     map: Arc<M>,
+    /// High level planning
     high_level_planner: HashMap<AgentId, Arc<Mutex<dyn HighLevelPlanner<M>>>>,
-    local_planner: HashMap<AgentId, Arc<dyn LocalPlanner<M>>>,
+    local_planner: HashMap<AgentId, Arc<dyn LocalPlanner<M, T>>>,
     sim_time: std::time::Duration
 }
 
-impl<M: Map> Simulation<M> {
+impl<M: Map, T: SpatialIndex> Simulation<M, T> {
 
-    pub fn new(map: Arc<M>) -> Self
+    pub fn new(map: Arc<M>, spatial_index: T) -> Self
     {
         Self {
             agents: vec!(),
             map: map,
+            spatial_index: spatial_index,
             high_level_planner: HashMap::new(),
             local_planner: HashMap::new(),
             sim_time: std::time::Duration::new(0,0)
@@ -69,7 +69,7 @@ impl<M: Map> Simulation<M> {
         &mut self,
         spawn_positions: &Vec<Point>,
         high_level_planner: Arc<Mutex<dyn HighLevelPlanner<M>>>,
-        local_planner: Arc<dyn LocalPlanner<M>>) -> Vec<AgentId>
+        local_planner: Arc<dyn LocalPlanner<M, T>>) -> Result<Vec<AgentId>, String>
     {
         let mut res = Vec::<AgentId>::new();
         for x in spawn_positions
@@ -88,12 +88,17 @@ impl<M: Map> Simulation<M> {
                     angular_vel: 0f64
                 }
             );
+            let success = self.spatial_index.add_or_update(agent_id, *x);
+            if let Err(error_message) = success
+            {
+                return Err(error_message)
+            }
             res.push(agent_id);
         }
-        res
+        Ok(res)
     }
 
-    pub fn step (&mut self, dur: std::time::Duration)
+    pub fn step (&mut self, dur: std::time::Duration) -> Result<(),String>
     {
         for x in 0..self.agents.len()
         {
@@ -112,14 +117,21 @@ impl<M: Map> Simulation<M> {
 
             // Execute the local
             if let Some(local_planner) = self.local_planner.get(&agent_id) {
-                vel = local_planner.get_desired_velocity(&self.agents[x], vel, self.map.clone());
+                vel = local_planner.get_desired_velocity(&self.agents[x], vel, &self.spatial_index, self.map.clone());
             }
 
             // Agent position
             let dx = vel * dur.as_secs_f64();
             self.agents[x].position += dx;
             self.agents[x].velocity = vel;
+
+            let success = self.spatial_index.add_or_update(agent_id, self.agents[x].position);
+            if let Err(error_message) = success
+            {
+                return Err(error_message)
+            }
         }
+        Ok(())
     }
 }
 
