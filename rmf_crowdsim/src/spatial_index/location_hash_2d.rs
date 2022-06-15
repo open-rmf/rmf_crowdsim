@@ -115,6 +115,22 @@ impl LocationHash2D
         return Some(agents_in_ring);
     }
 
+    fn get_bounds(&self, radius: f64, position: Point) -> (i64, i64, i64, i64)
+    {
+        let right_extrema_pt = Point::new(position.x + radius, position.y);
+        let (right_extrema_idx, _) = self.location_to_xy_signed_idx(right_extrema_pt);
+
+        let left_extrema_pt = Point::new(position.x - radius, position.y);
+        let (left_extrema_idx, _) = self.location_to_xy_signed_idx(left_extrema_pt);
+
+        let top_extrema_pt = Point::new(position.x, position.y + radius);
+        let (_, top_extrema_idx) = self.location_to_xy_signed_idx(top_extrema_pt);
+
+        let bottom_extrema_pt = Point::new(position.x, position.y - radius);
+        let (_, bottom_extrema_idx) = self.location_to_xy_signed_idx(bottom_extrema_pt);
+
+        (left_extrema_idx, right_extrema_idx, bottom_extrema_idx, top_extrema_idx)
+    }
 }
 
 impl SpatialIndex for LocationHash2D
@@ -182,7 +198,6 @@ impl SpatialIndex for LocationHash2D
                 // Top line
                 for i in (x_idx - step)..(x_idx + step)
                 {
-                    //println!("Checking {},{}", i, y_idx+step);
                     let neighbours = self.get_neighbours_in_cell(i, y_idx+step);
                     if let Some(neighbours) = neighbours
                     {
@@ -264,7 +279,28 @@ impl SpatialIndex for LocationHash2D
 
     fn get_neighbours_in_radius(&self, radius: f64, position: Point) -> Vec<AgentId>
     {
-        vec!()
+        let (x_idx, y_idx) = self.location_to_xy_signed_idx(position);
+
+        let mut agents = vec!();
+        let mut step = 0;
+
+        let (left_bound, right_bound, bottom_bound, top_bound) = self.get_bounds(radius, position);
+
+        for x_idx in left_bound..=right_bound
+        {
+            for y_idx in bottom_bound..=top_bound
+            {
+                let result = self.get_neighbours_in_cell(x_idx, y_idx);
+                if let Some(result) = result
+                {
+                    let inliers = result.iter()
+                        .filter(|(agent_pos, _)|{ (agent_pos-position).norm() < radius })
+                        .map(|(_, agent_id)| agent_id);
+                    agents.extend(inliers);
+                }
+            }
+        }
+        agents
     }
 
     fn remove_agent(&mut self, id: AgentId) {
@@ -317,8 +353,9 @@ mod tests {
     }
 
     // Tests single nearest neighbour works.
+    // TODO(arjo) : Test should be lot more comprehensive
     #[test]
-    fn test_nearest_neighbour_single_cell()
+    fn test_nearest_neighbours()
     {
         let mut location_hash = LocationHash2D::new(10f64, 10f64, 0.5f64, Point::new(0f64,0f64));
         let mut id = 0 as usize;
@@ -344,5 +381,44 @@ mod tests {
         let neighbours = location_hash.get_nearest_neighbours(1, Point::new(0.6f64, 0.6f64));
         assert_eq!(neighbours.len(), 1);
         assert_eq!(neighbours[0], 0);
+
+        // Query nearest neighbour for a given point
+        let neighbours = location_hash.get_nearest_neighbours(4, Point::new(1.7f64, 1.6f64));
+        let ground_truth_neighbours =
+            naive_knearest_neighbours(4, Point::new(1.7f64, 1.6f64), naive_nn);
+        assert_eq!(neighbours, ground_truth_neighbours);
+    }
+
+    // Tests multiple nearest neighbours
+    #[test]
+    fn test_radius_search()
+    {
+        let mut location_hash = LocationHash2D::new(10f64, 10f64, 0.5f64, Point::new(0f64,0f64));
+        let mut id = 0 as usize;
+        let mut naive_nn = HashMap::new();
+
+        // Populate the database
+        for x in 0..10
+        {
+            for y in 0..10
+            {
+                let p = Point::new(x as f64 + 0.5f64, y as f64 + 0.5f64);
+                let res =
+                    location_hash.add_or_update(id, p);
+                if let Err(_msg) = res {
+                    assert_eq!(0, 1);
+                }
+                naive_nn.insert(id, p);
+                id += 1;
+            }
+        }
+
+        let agents_gt = naive_radius_search(1.1, Point::new(4f64,4f64), naive_nn);
+        let agents_gt: HashSet<&usize> = HashSet::from_iter(agents_gt.iter());
+
+        let agents = location_hash.get_neighbours_in_radius(1.1, Point::new(4f64,4f64));
+        let agents: HashSet<&usize> = HashSet::from_iter(agents.iter());
+
+        assert_eq!(agents, agents_gt);
     }
 }
