@@ -5,10 +5,10 @@ use crate::spatial_index::spatial_index::SpatialIndex;
 
 use std::sync::Arc;
 
-pub trait LocalPlanner<M : Map, T: SpatialIndex> {
+pub trait LocalPlanner<M : Map> {
     fn get_desired_velocity(&self,
         agent: &Agent,
+        nearby_agents: &Vec<Agent>,
         recommended_velocity: Vec2f,
-        spatial_index: &T,
         map: Arc<M>) -> Vec2f;
 }

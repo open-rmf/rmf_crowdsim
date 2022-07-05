@@ -8,9 +8,9 @@ use std::sync::Arc;
 
 pub struct NoLocalPlan{}
 
-impl<M: Map, T: SpatialIndex> LocalPlanner<M, T> for NoLocalPlan {
+impl<M: Map> LocalPlanner<M> for NoLocalPlan {
     fn get_desired_velocity(&self,
-        _agent: &Agent, recommended_velocity: Vec2f, _spatial_index: &T, _map: Arc<M>) -> Vec2f
+        _agent: &Agent, _nearby_agents: &Vec<Agent>, recommended_velocity: Vec2f, _map: Arc<M>) -> Vec2f
     {
         recommended_velocity
     }

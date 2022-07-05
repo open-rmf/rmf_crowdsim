@@ -95,7 +95,8 @@ fn create_crowd_model(_app: &App) -> SimulationModel<NoMap, StubSpatialIndex> {
     let res = model.crowd_simulation.add_agents(
         &agent_start_positions,
         high_level_planner,
-        local_planner);
+        local_planner,
+        20f64);
     if let Err(error_message) = res {
         panic!("Failed to add crowd simulation:\n\t{}", error_message);
     }

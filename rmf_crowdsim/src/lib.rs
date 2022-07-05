@@ -24,6 +24,7 @@ pub type Point = Vector2<f64>;
 pub type Vec2f = Vector2<f64>;
 
 /// Data representing an individual agent
+#[derive(Clone, Debug)]
 pub struct Agent {
     /// Unique Agent ID
     agent_id : AgentId,
@@ -33,8 +34,12 @@ pub struct Agent {
     pub orientation: f64,
     /// Velocity of agent
     pub velocity: Vector2<f64>,
+    /// Preferred velocity
+    preferred_vel: Vec2f,
     /// Angular velocity of agent
-    pub angular_vel: f64
+    pub angular_vel: f64,
+    /// Eyesight range: How far each individual agent can "see"
+    pub eyesight_range: f64
 }
 
 /// A representation of a simulation session
@@ -47,7 +52,7 @@ pub struct Simulation<M: Map, T: SpatialIndex> {
     map: Arc<M>,
     /// High level planning
     high_level_planner: HashMap<AgentId, Arc<Mutex<dyn HighLevelPlanner<M>>>>,
-    local_planner: HashMap<AgentId, Arc<dyn LocalPlanner<M, T>>>,
+    local_planner: HashMap<AgentId, Arc<dyn LocalPlanner<M>>>,
     sim_time: std::time::Duration
 }
 
@@ -69,7 +74,8 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
         &mut self,
         spawn_positions: &Vec<Point>,
         high_level_planner: Arc<Mutex<dyn HighLevelPlanner<M>>>,
-        local_planner: Arc<dyn LocalPlanner<M, T>>) -> Result<Vec<AgentId>, String>
+        local_planner: Arc<dyn LocalPlanner<M>>,
+        agent_eyesight_range: f64) -> Result<Vec<AgentId>, String>
     {
         let mut res = Vec::<AgentId>::new();
         for x in spawn_positions
@@ -85,7 +91,9 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
                     position: *x,
                     orientation: 0f64,
                     velocity: Vector2::<f64>::new(0f64, 0f64),
-                    angular_vel: 0f64
+                    preferred_vel: Vector2::<f64>::new(0f64, 0f64),
+                    angular_vel: 0f64,
+                    eyesight_range: agent_eyesight_range
                 }
             );
             let success = self.spatial_index.add_or_update(agent_id, *x);
@@ -112,12 +120,22 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
                 if let Some(res) = result
                 {
                     vel = res;
+                    self.agents[x].preferred_vel = vel.clone();
                 }
             }
 
-            // Execute the local
+            // Execute the local planner
             if let Some(local_planner) = self.local_planner.get(&agent_id) {
-                vel = local_planner.get_desired_velocity(&self.agents[x], vel, &self.spatial_index, self.map.clone());
+                let neighbour_ids = self.spatial_index.get_neighbours_in_radius(
+                    self.agents[x].eyesight_range,
+                    self.agents[x].position);
+
+                let neighbours = Vec::from_iter(neighbour_ids.iter()
+                  .filter(|agent_id| **agent_id != x)
+                  .map(|agent_id| self.agents[*agent_id].clone()));
+
+                vel = local_planner.get_desired_velocity(
+                    &self.agents[x], &neighbours, vel, self.map.clone());
             }
 
             // Agent position

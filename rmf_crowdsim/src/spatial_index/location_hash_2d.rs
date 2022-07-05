@@ -279,8 +279,6 @@ impl SpatialIndex for LocationHash2D
 
     fn get_neighbours_in_radius(&self, radius: f64, position: Point) -> Vec<AgentId>
     {
-        let (x_idx, y_idx) = self.location_to_xy_signed_idx(position);
-
         let mut agents = vec!();
         let mut step = 0;
 
