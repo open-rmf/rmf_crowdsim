@@ -101,7 +101,6 @@ impl LocationHash2D
         {
             Some(idx) =>
             {
-                println!("Got IDX {}", idx);
                 for agent_id in &self.data[idx]
                 {
                     agents_in_ring.push((self.id_to_exact_location[&agent_id], agent_id.clone()))

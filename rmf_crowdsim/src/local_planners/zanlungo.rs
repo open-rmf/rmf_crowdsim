@@ -7,6 +7,8 @@ use crate::AgentId;
 use std::sync::Arc;
 use std::collections::HashMap;
 
+use parry2d_f64::query::details::*;
+
 pub struct Zanlungo
 {
     agent_scale: f64,
@@ -32,14 +34,61 @@ fn slerp(t: f64, p0: &Vec2f, p1: &Vec2f, sinTheta: f64) -> Vec2f
 
 impl Zanlungo
 {
-    fn time_to_collision(rel_vel: Vec2f, rel_pos: Vec2f) -> Option<f64>
+    pub fn new(agent_scale: f64, obstacle_scale: f64, reaction_time: f64, force_distance: f64, agent_mass: f64, agent_radius: f64) -> Self
     {
+        Zanlungo {
+            agent_scale: agent_scale,
+            obstacle_scale: obstacle_scale,
+            reaction_time: reaction_time,
+            force_distance: force_distance,
+            agent_mass: agent_mass,
+            agent_radius: agent_radius,
+            agent_priorities: HashMap::new()
+        }
+    }
+    fn time_to_collision(&self, rel_vel: &Vec2f, rel_pos: &Vec2f) -> f64
+    {
+        println!("Relative velocity:\n {}Position:\n {}", rel_vel, rel_pos);
+        let a = rel_vel.norm_squared();
+        let b = 2f64 * rel_vel.dot(&rel_pos);
+        let c = rel_pos.norm_squared() - self.agent_radius * self.agent_radius;
+
+        println!("Solving {}x^2 + {}x + {}", a, b, c);
+
+        let discriminant = b * b - 4f64 * a * c;
+
+        println!("Discriminant: {}", discriminant);
+
+        // Determine shortest time
+        if discriminant < 0f64 {
+
+            return f64::INFINITY;
+        }
+
+        let t0 = (- b - discriminant.sqrt()) / (2f64 * a);
+        let t1 = (- b + discriminant.sqrt()) / (2f64 * a);
+        println!("Got time of collisions: {} {}", t0, t1);
+        if (t0 < 0f64 && t1 > 0f64) || (t1 < 0f64 && t0 > 0f64)
+        {
+            return 0f64;
+        }
+        if t0 < t1 && t0 > 0f64
+        {
+            return t0;
+        }
+        else if t1 > 0f64
+        {
+            return t1;
+        }
+        else {
+            return f64::INFINITY;
+        }
     }
     /// Computes the time to the first collision
     pub fn compute_tti(&self,
-        current_agent: &Agent, nearby_agents: &Vec<Agent>) -> Option<f64>
+        current_agent: &Agent, nearby_agents: &Vec<Agent>) -> f64
     {
-        let mut t_i = None;
+        let mut t_i = f64::INFINITY;
         let mut closest_collision = f64::INFINITY;
         for n in nearby_agents
         {
@@ -48,131 +97,16 @@ impl Zanlungo
             // rel_vel * t + rel_pos
 
             // Solve for collision here
-            let a = rel_vel.norm_squared();
-            let b = - rel_vel.dot(&rel_pos);
-            let c = - rel_pos.norm_squared() - 4f64 * self.agent_radius * self.agent_radius;
+            let col_time = self.time_to_collision(&rel_vel, &rel_pos);
 
-            let discriminant = b * b - 4f64 * a * c;
-
-            // Determine shortest time
-            if discriminant > 0f64 {
-                let sol1 = - b - discriminant.sqrt() / (2f64 * a);
-                let sol2 = - b + discriminant.sqrt() / (2f64 * a);
-
-                if sol1 > 0f64 && sol2 > 0f64
-                {
-                    if sol1 < sol2
-                    {
-                        match t_i {
-                            Some(x) => {
-                                if x > sol1 {
-                                    t_i = Some(sol1);
-                                }
-                            },
-                            None => { t_i = Some(sol1); }
-                        }
-                    }
-                    else
-                    {
-                        match t_i {
-                            Some(x) => {
-                                if x > sol2 {
-                                    t_i = Some(sol2);
-                                }
-                            },
-                            None => { t_i = Some(sol2); }
-                        }
-                    }
-                }
-                else if sol1 > 0f64
-                {
-                    match t_i {
-                        Some(x) => {
-                            if x > sol1 {
-                                t_i = Some(sol1);
-                            }
-                        },
-                        None => { t_i = Some(sol1); }
-                    }
-                }
-                else if sol2 > 0f64
-                {
-                    match t_i {
-                        Some(x) => {
-                            if x > sol2 {
-                                t_i = Some(sol2);
-                            }
-                        },
-                        None => { t_i = Some(sol2); }
-                    }
-                }
+            if col_time < t_i
+            {
+                t_i = col_time;
             }
         }
         t_i
     }
-    /*
-    Vector2 Agent::agentForce(const Agent* other, float T_i) const {
-  float D = Simulator::FORCE_DISTANCE;
-  // Right of way-dependent calculations
-  Vector2 myVel = _vel;
-  Vector2 hisVel = other->_vel;
-  float weight =
-      1.f - rightOfWayVel(hisVel, other->_velPref.getPreferredVel(), other->_priority, myVel);
 
-  const Vector2 relVel = myVel - hisVel;
-
-  Vector2 futPos = _pos + myVel * T_i;
-  Vector2 otherFuturePos = other->_pos + hisVel * T_i;
-  Vector2 D_ij = futPos - otherFuturePos;
-
-  // If the relative velocity is divergent do nothing
-  if (D_ij * (_vel - other->_vel) > 0.f) return Vector2(0.f, 0.f);
-  float dist = abs(D_ij);
-  D_ij /= dist;
-  if (weight > 1.f) {
-    // Other agent has right of way
-    float prefSpeed = other->_velPref.getSpeed();
-    Vector2 perpDir;
-    bool interpolate = true;
-    if (prefSpeed < 0.0001f) {
-      // he wants to be stationary, accelerate perpinduclarly to displacement
-      Vector2 currRelPos = _pos - other->_pos;
-      perpDir.set(-currRelPos.y(), currRelPos.x());
-      if (perpDir * _vel < 0.f) perpDir.negate();
-    } else {
-      // He's moving somewhere, accelerate perpindicularly to his preferred direction
-      // of travel.
-      const Vector2 prefDir(other->_velPref.getPreferred());
-      if (prefDir * D_ij > 0.f) {
-        // perpendicular to preferred velocity
-        perpDir.set(-prefDir.y(), prefDir.x());
-        if (perpDir * D_ij < 0.f) perpDir.negate();
-      } else {
-        interpolate = false;
-      }
-    }
-    // spherical linear interpolation
-    if (interpolate) {
-      float sinTheta = det(perpDir, D_ij);
-      if (sinTheta < 0.f) {
-        sinTheta = -sinTheta;
-      }
-      if (sinTheta > 1.f) {
-        sinTheta = 1.f;  // clean up numerical error arising from determinant
-      }
-      D_ij.set(slerp(weight - 1.f, D_ij, perpDir, sinTheta));
-    }
-  }
-  dist -= (_radius + other->_radius);
-  float magnitude = weight * Simulator::AGENT_SCALE * abs(_vel - other->_vel) / T_i;
-  const float MAX_FORCE = 1e15f;
-  if (magnitude >= MAX_FORCE) {
-    magnitude = MAX_FORCE;
-  }
-  // float magnitude = weight * Simulator::AGENT_SCALE * abs( myVel - hisVel ) / T_i;
-  // 3. Compute the force
-  return D_ij * (magnitude * expf(-dist / D));
-}*/
     fn compute_agent_force(&self, agent: &Agent, other_agent: &Agent, t_i: f64) -> Vec2f
     {
         let other_priority = self.agent_priorities.get(&other_agent.agent_id).unwrap_or(&0f64);
@@ -281,9 +215,11 @@ impl<M: Map> LocalPlanner<M> for Zanlungo {
         agent: &Agent, nearby_agents: &Vec<Agent>, recommended_velocity: Vec2f, map: Arc<M>) -> Vec2f
     {
         let t_i = self.compute_tti(agent, nearby_agents);
+        //println!("", )
         let mut force = Vec2f::new(0f64,0f64);
-        if let Some(t_i) = t_i
+        if t_i != f64::INFINITY
         {
+            println!("Collision Imminent in  {}s", t_i);
             for nearby_agent in nearby_agents
             {
                 force += self.compute_agent_force(agent, nearby_agent, t_i);
@@ -292,3 +228,27 @@ impl<M: Map> LocalPlanner<M> for Zanlungo {
         recommended_velocity + (force * (1f64/self.agent_mass))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_time_to_collision_head_on()
+    {
+        let zanlungo = Zanlungo::new(1f64, 10f64, 0f64, 5f64, 0.1f64, 4f64);
+        let ttc = zanlungo.time_to_collision(
+            &Vec2f::new(1f64, 0f64), &Vec2f::new(-10f64, 0f64));
+        assert_eq!(ttc, 6f64);
+    }
+
+    #[test]
+    fn test_time_to_collision_never_collide()
+    {
+        let zanlungo = Zanlungo::new(1f64, 10f64, 0f64, 5f64, 0.1f64, 4f64);
+        let ttc = zanlungo.time_to_collision(
+            &Vec2f::new(1f64, 0f64), &Vec2f::new(10f64, 0f64));
+        assert_eq!(ttc, f64::INFINITY);
+    }
+}
+

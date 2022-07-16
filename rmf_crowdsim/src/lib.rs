@@ -27,7 +27,7 @@ pub type Vec2f = Vector2<f64>;
 #[derive(Clone, Debug)]
 pub struct Agent {
     /// Unique Agent ID
-    agent_id : AgentId,
+    pub agent_id : AgentId,
     /// Position of a point
     pub position : Point,
     /// Orientation of agent
