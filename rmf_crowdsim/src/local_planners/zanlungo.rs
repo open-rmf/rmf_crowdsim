@@ -48,16 +48,11 @@ impl Zanlungo
     }
     fn time_to_collision(&self, rel_vel: &Vec2f, rel_pos: &Vec2f) -> f64
     {
-        println!("Relative velocity:\n {}Position:\n {}", rel_vel, rel_pos);
         let a = rel_vel.norm_squared();
         let b = 2f64 * rel_vel.dot(&rel_pos);
         let c = rel_pos.norm_squared() - self.agent_radius * self.agent_radius;
 
-        println!("Solving {}x^2 + {}x + {}", a, b, c);
-
         let discriminant = b * b - 4f64 * a * c;
-
-        println!("Discriminant: {}", discriminant);
 
         // Determine shortest time
         if discriminant < 0f64 {
@@ -67,7 +62,7 @@ impl Zanlungo
 
         let t0 = (- b - discriminant.sqrt()) / (2f64 * a);
         let t1 = (- b + discriminant.sqrt()) / (2f64 * a);
-        println!("Got time of collisions: {} {}", t0, t1);
+
         if (t0 < 0f64 && t1 > 0f64) || (t1 < 0f64 && t0 > 0f64)
         {
             return 0f64;
@@ -109,7 +104,8 @@ impl Zanlungo
 
     fn compute_agent_force(&self, agent: &Agent, other_agent: &Agent, t_i: f64) -> Vec2f
     {
-        let other_priority = self.agent_priorities.get(&other_agent.agent_id).unwrap_or(&0f64);
+        let def_priority = other_agent.agent_id as f64;
+        let other_priority = self.agent_priorities.get(&other_agent.agent_id).unwrap_or(&def_priority);
         let (weight, my_vel, other_vel) = self.rightOfWayVel(
             &agent.agent_id,
             &agent.velocity,
@@ -123,7 +119,6 @@ impl Zanlungo
         let other_future_pos = other_agent.position + other_vel * t_i;
         let mut d_ij = fut_pos - other_future_pos;
         let dist = d_ij.norm();
-
         if weight > 1f64 {
             // Other agent has right of way
             let pref_speed = other_agent.preferred_vel.norm();
@@ -165,6 +160,7 @@ impl Zanlungo
             }
         }
 
+
         // Determine if the agents converge
         // TODO(arjo): Use L2 Norm instead
         if dist > (fut_pos - other_future_pos).norm()
@@ -182,7 +178,7 @@ impl Zanlungo
             magnitude = 1e15f64;
         }
 
-        d_ij * (magnitude * (-surface_dist / self.force_distance).exp())
+        d_ij_normalized * (magnitude * (-surface_dist / self.force_distance).exp())
     }
 
     // Returns the right of way velocity based on priority
@@ -193,7 +189,9 @@ impl Zanlungo
         other_vel: &Vec2f,
         other_pref_vel: &Vec2f,
         other_priority: f64) -> (f64, Vec2f, Vec2f) {
-      let self_priority = self.agent_priorities.get(agent_id).unwrap_or(&0f64);
+      // TOOD: Find API for tweaking agent ID
+      let def_priority = *agent_id as f64;
+      let self_priority = self.agent_priorities.get(agent_id).unwrap_or(&def_priority);
       let right_of_way = (self_priority - other_priority).clamp(-1f64, 1f64);
       if right_of_way < 0f64 {
         let r_2 = (-right_of_way).sqrt();  // right_of_way * right_of_way; // -right_of_way; //
@@ -215,11 +213,10 @@ impl<M: Map> LocalPlanner<M> for Zanlungo {
         agent: &Agent, nearby_agents: &Vec<Agent>, recommended_velocity: Vec2f, map: Arc<M>) -> Vec2f
     {
         let t_i = self.compute_tti(agent, nearby_agents);
-        //println!("", )
+
         let mut force = Vec2f::new(0f64,0f64);
         if t_i != f64::INFINITY
         {
-            println!("Collision Imminent in  {}s", t_i);
             for nearby_agent in nearby_agents
             {
                 force += self.compute_agent_force(agent, nearby_agent, t_i);
@@ -227,6 +224,8 @@ impl<M: Map> LocalPlanner<M> for Zanlungo {
         }
         recommended_velocity + (force * (1f64/self.agent_mass))
     }
+
+
 }
 
 #[cfg(test)]

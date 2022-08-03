@@ -56,8 +56,10 @@ pub struct Simulation<M: Map, T: SpatialIndex> {
     sim_time: std::time::Duration
 }
 
+///
 impl<M: Map, T: SpatialIndex> Simulation<M, T> {
 
+    /// Create a new simulation environment
     pub fn new(map: Arc<M>, spatial_index: T) -> Self
     {
         Self {

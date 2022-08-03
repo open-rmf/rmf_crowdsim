@@ -1,4 +1,5 @@
 use crate::Agent;
+use crate::AgentId;
 use crate::Vec2f;
 use crate::map_representation::map::Map;
 use crate::spatial_index::spatial_index::SpatialIndex;
@@ -11,4 +12,6 @@ pub trait LocalPlanner<M : Map> {
         nearby_agents: &Vec<Agent>,
         recommended_velocity: Vec2f,
         map: Arc<M>) -> Vec2f;
+
+    fn add_agent(&mut self, _id :AgentId) {}
 }

@@ -91,19 +91,26 @@ fn create_crowd_model(_app: &App) -> SimulationModel<NoMap, LocationHash2D> {
         crowd_simulation: Simulation::<NoMap, LocationHash2D>::new(map, stub_spatial)
     };
 
-    let agent_start_positions = vec!(Point::new(100f64,100f64), Point::new(100f64,-100f64));
+    let agent_start_positions = vec!(
+        Point::new(100f64,100f64),
+        Point::new(100f64,-100f64),
+        Point::new(60f64,100f64));
 
     let speed = Vec2f::new(0f64, 10f64);
     let high_level_planner = Arc::new(Mutex::new(StubHighLevelPlan::new(speed)));
-    let local_planner = Arc::new(Zanlungo::new(1f64, 1f64, 0f64, 20f64, 2f64, 10f64));
+    let mut local_planner = Arc::new(Zanlungo::new(1f64, 1f64, 0f64, 40f64, 2f64, 20f64));
 
     let res = model.crowd_simulation.add_agents(
         &agent_start_positions,
         high_level_planner,
         local_planner,
         100f64);
+
     if let Err(error_message) = res {
         panic!("Failed to add crowd simulation:\n\t{}", error_message);
+    }
+    else if let Ok(agents) = res {
+
     }
     model
 }
