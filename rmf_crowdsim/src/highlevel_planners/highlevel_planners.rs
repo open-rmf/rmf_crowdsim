@@ -13,7 +13,7 @@ pub trait HighLevelPlanner<M: Map> {
     fn set_target(&mut self, agent: &Agent, point: Point, tolerance: Vec2f);
 
     /// Remove an agent
-    fn remove_agent_id(&mut self, agent: AgentId) {}
+    fn remove_agent_id(&mut self, _agent: AgentId) {}
 
     fn set_map(&mut self, map: Arc<M>);
 }

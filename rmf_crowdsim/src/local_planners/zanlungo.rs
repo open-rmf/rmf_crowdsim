@@ -7,8 +7,6 @@ use crate::Vec2f;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use parry2d_f64::query::details::*;
-
 pub struct Zanlungo {
     agent_scale: f64,
     obstacle_scale: f64,
@@ -23,10 +21,10 @@ pub struct Zanlungo {
 /// Computes the spherical linear interpolation between two vectors
 /// the result is (conceptually) (1-t)*p0 + t*p1
 /// sinTheta is the sine of the angle between p1 and p1
-fn slerp(t: f64, p0: &Vec2f, p1: &Vec2f, sinTheta: f64) -> Vec2f {
-    let theta = sinTheta.asin();
-    let t0 = ((1f64 - t) * theta).sin() / sinTheta;
-    let t1 = (t * theta).sin() / sinTheta;
+fn slerp(t: f64, p0: &Vec2f, p1: &Vec2f, sin_theta: f64) -> Vec2f {
+    let theta = sin_theta.asin();
+    let t0 = ((1f64 - t) * theta).sin() / sin_theta;
+    let t1 = (t * theta).sin() / sin_theta;
     return p0 * t0 + p1 * t1;
 }
 
@@ -78,7 +76,6 @@ impl Zanlungo {
     /// Computes the time to the first collision
     pub fn compute_tti(&self, current_agent: &Agent, nearby_agents: &Vec<Agent>) -> f64 {
         let mut t_i = f64::INFINITY;
-        let mut closest_collision = f64::INFINITY;
         for n in nearby_agents {
             let rel_vel = n.velocity - current_agent.velocity;
             let rel_pos = n.position - current_agent.position;
@@ -100,7 +97,7 @@ impl Zanlungo {
             .agent_priorities
             .get(&other_agent.agent_id)
             .unwrap_or(&def_priority);
-        let (weight, my_vel, other_vel) = self.rightOfWayVel(
+        let (weight, my_vel, other_vel) = self.right_of_way_vel(
             &agent.agent_id,
             &agent.velocity,
             &agent.preferred_vel,
@@ -118,24 +115,24 @@ impl Zanlungo {
             // Other agent has right of way
             let pref_speed = other_agent.preferred_vel.norm();
             let mut interpolate = true;
-            let mut perpDir = Vec2f::new(0f64, 0f64);
+            let mut perp_dir = Vec2f::new(0f64, 0f64);
 
             if pref_speed < 0.0001f64 {
                 // he wants to be stationary, accelerate orthogonally to displacement
-                let currRelPos = agent.position - other_agent.position;
-                perpDir = Vec2f::new(-currRelPos.y, currRelPos.x);
-                if perpDir.dot(&agent.velocity) < 0f64 {
-                    perpDir = -perpDir;
+                let curr_rel_pos = agent.position - other_agent.position;
+                perp_dir = Vec2f::new(-curr_rel_pos.y, curr_rel_pos.x);
+                if perp_dir.dot(&agent.velocity) < 0f64 {
+                    perp_dir = -perp_dir;
                 }
             } else {
                 // He's moving somewhere, accelerate orthogonally to his preferred direction
                 // of travel.
-                let prefDir = other_agent.preferred_vel;
-                if prefDir.dot(&d_ij) > 0f64 {
+                let pref_dir = other_agent.preferred_vel;
+                if pref_dir.dot(&d_ij) > 0f64 {
                     // perpendicular to preferred velocity
-                    perpDir = Vec2f::new(-prefDir.y, prefDir.x);
-                    if perpDir.dot(&d_ij) < 0f64 {
-                        perpDir = -perpDir;
+                    perp_dir = Vec2f::new(-pref_dir.y, pref_dir.x);
+                    if perp_dir.dot(&d_ij) < 0f64 {
+                        perp_dir = -perp_dir;
                     }
                 } else {
                     interpolate = false;
@@ -143,14 +140,14 @@ impl Zanlungo {
             }
             // spherical linear interpolation
             if interpolate {
-                let mut sinTheta = perpDir.x * d_ij.y - perpDir.y * d_ij.x;
-                if sinTheta < 0f64 {
-                    sinTheta = -sinTheta;
+                let mut sin_theta = perp_dir.x * d_ij.y - perp_dir.y * d_ij.x;
+                if sin_theta < 0f64 {
+                    sin_theta = -sin_theta;
                 }
-                if sinTheta > 1f64 {
-                    sinTheta = 1f64; // clean up numerical error arising from determinant
+                if sin_theta > 1f64 {
+                    sin_theta = 1f64; // clean up numerical error arising from determinant
                 }
-                d_ij = slerp(weight - 1f64, &d_ij, &perpDir, sinTheta);
+                d_ij = slerp(weight - 1f64, &d_ij, &perp_dir, sin_theta);
             }
         }
 
@@ -166,7 +163,7 @@ impl Zanlungo {
 
         let mut magnitude = weight * self.agent_scale * (my_vel - other_vel).norm() / t_i;
 
-        if (magnitude >= 1e15f64) {
+        if magnitude >= 1e15f64 {
             magnitude = 1e15f64;
         }
 
@@ -174,7 +171,7 @@ impl Zanlungo {
     }
 
     // Returns the right of way velocity based on priority
-    fn rightOfWayVel(
+    fn right_of_way_vel(
         &self,
         agent_id: &AgentId,
         agent_vel: &Vec2f,

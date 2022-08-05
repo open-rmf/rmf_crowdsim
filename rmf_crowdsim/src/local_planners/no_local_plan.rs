@@ -1,6 +1,5 @@
 use crate::local_planners::local_planner::LocalPlanner;
 use crate::map_representation::map::Map;
-use crate::spatial_index::spatial_index::SpatialIndex;
 use crate::Agent;
 use crate::Vec2f;
 

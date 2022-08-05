@@ -1,5 +1,4 @@
 use crate::map_representation::map::Map;
-use crate::spatial_index::spatial_index::SpatialIndex;
 use crate::Agent;
 use crate::AgentId;
 use crate::Vec2f;

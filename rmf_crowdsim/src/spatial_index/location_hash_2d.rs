@@ -235,7 +235,6 @@ impl SpatialIndex for LocationHash2D {
 
     fn get_neighbours_in_radius(&self, radius: f64, position: Point) -> Vec<AgentId> {
         let mut agents = vec![];
-        let mut step = 0;
 
         let (left_bound, right_bound, bottom_bound, top_bound) = self.get_bounds(radius, position);
 
