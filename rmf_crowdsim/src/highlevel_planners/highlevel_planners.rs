@@ -1,8 +1,8 @@
 use crate::map_representation::map::Map;
-use crate::Vec2f;
-use crate::Point;
 use crate::Agent;
 use crate::AgentId;
+use crate::Point;
+use crate::Vec2f;
 
 use std::sync::Arc;
 
@@ -13,7 +13,7 @@ pub trait HighLevelPlanner<M: Map> {
     fn set_target(&mut self, agent: &Agent, point: Point, tolerance: Vec2f);
 
     /// Remove an agent
-    fn remove_agent_id(&mut self, agent: AgentId);
+    fn remove_agent_id(&mut self, agent: AgentId) {}
 
     fn set_map(&mut self, map: Arc<M>);
 }
