@@ -1,25 +1,90 @@
 use crate::{Vec2f, AgentId};
+use std::time::Duration;
+use std::sync::{Arc, Mutex};
 
-trait CrowdGenerator
+use crate::highlevel_planners::highlevel_planners::HighLevelPlanner;
+use crate::local_planners::local_planner::LocalPlanner;
+use crate::map_representation::map::Map;
+
+/// Trait for crowd generation
+pub trait CrowdGenerator
 {
-    fn spawn_location() -> Vec2f;
+    /// Gets the number of pedestrians to spawn at a given time.
+    fn get_number_to_spawn(&self, time_elapsed: Duration) -> usize;
 }
 
-trait EventListener
+/// Serves as a source and a sink component.
+pub struct SourceSink<M: Map>
 {
-    fn agent_spawned(position: Vec2f, agent: AgentId);
+    /// The source location
+    pub source: Vec2f,
 
-    fn agent_destroyed(agent: AgentId);
+    /// The sink location
+    pub sink: Vec2f,
+
+    /// The radius of the sink location
+    pub radius_sink: f64,
+
+    /// Generate crowds
+    pub crowd_generator: Arc<dyn CrowdGenerator>,
+
+    /// High level planning
+    pub high_level_planner: Arc<Mutex<dyn HighLevelPlanner<M>>>,
+
+    /// Local avoidance strategy
+    pub local_planner: Arc<Mutex<dyn LocalPlanner<M>>>,
+
+    /// Eyesight (TODO(arjo): Replace with AgentProperties)
+    pub agent_eyesight_range: f64
 }
 
-struct SourceSink
+pub struct PoissonCrowd
 {
-    source: Vec2f,
-    sink: Vec2f,
-    radius_sink: f64
+    pub rate: f64
 }
 
-struct PoissonCrowd
+impl PoissonCrowd
 {
-    rate: f64
+    pub fn new(rate: f64) -> Self {
+        PoissonCrowd
+        {
+            rate: rate,
+        }
+    }
+}
+
+impl CrowdGenerator for PoissonCrowd
+{
+
+    fn get_number_to_spawn(&self, time_elapsed: Duration) -> usize
+    {
+        //let num_spawned = time_elapsed.as_secs_f64() * rate;
+        0 as usize
+    }
+}
+
+
+
+pub struct MonotonicCrowd
+{
+    pub rate: f64
+}
+
+impl MonotonicCrowd
+{
+    pub fn new(rate: f64) -> Self {
+        MonotonicCrowd
+        {
+            rate: rate,
+        }
+    }
+}
+
+impl CrowdGenerator for MonotonicCrowd
+{
+    fn get_number_to_spawn(&self, time_elapsed: Duration) -> usize
+    {
+        let num_spawned = time_elapsed.as_secs_f64() * self.rate;
+        num_spawned.round() as usize
+    }
 }

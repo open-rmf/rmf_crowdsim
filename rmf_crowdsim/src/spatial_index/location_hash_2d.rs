@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 /// crowd simulation is limited by the density of the cluster (you can't have more than a certain
 /// number of people in a small amount of space, even if you are a slave trader or the CEO of
 /// the next Budget Airline).
+#[derive(Debug)]
 pub struct LocationHash2D {
     data: Vec<HashSet<AgentId>>,
     id_to_index: HashMap<AgentId, usize>,
@@ -127,17 +128,20 @@ impl SpatialIndex for LocationHash2D {
         if let Err(error_msg) = new_index {
             return Err(error_msg);
         }
+        //safe to unwrap
+        let new_index = new_index.unwrap();
 
         let old_index = self.id_to_index.get(&id);
         if let Some(old_index) = old_index {
-            let new_index = new_index.unwrap();
             if new_index != *old_index {
                 self.data[*old_index].remove(&id);
+                //println!("{}", b);
                 self.data[new_index].insert(id);
                 self.id_to_index.insert(id, new_index);
             }
         } else {
-            self.data[new_index.unwrap()].insert(id);
+            self.data[new_index].insert(id);
+            self.id_to_index.insert(id, new_index);
         }
 
         self.id_to_exact_location.insert(id, position);
@@ -256,7 +260,7 @@ impl SpatialIndex for LocationHash2D {
     fn remove_agent(&mut self, id: AgentId) {
         let index = self.id_to_index.get(&id);
         if let Some(index) = index {
-            self.data.get_mut(*index).unwrap().remove(&id);
+            self.data[*index].remove(&id);
             self.id_to_exact_location.remove(&id);
             self.id_to_index.remove(&id);
         }
@@ -361,5 +365,37 @@ mod tests {
         let agents: HashSet<&usize> = HashSet::from_iter(agents.iter());
 
         assert_eq!(agents, agents_gt);
+    }
+
+    #[test]
+    fn test_update() {
+        let mut location_hash = LocationHash2D::new(2f64, 2f64, 1f64, Point::new(0f64, 0f64));
+        let id = 1usize;
+        let _ = location_hash.add_or_update(id, Point::new(0f64, 0f64));
+
+
+        let _ = location_hash.add_or_update(id, Point::new(1f64, 0f64));
+    }
+
+    // Tests the removal of a point
+    #[test]
+    fn test_remove() {
+        let mut location_hash = LocationHash2D::new(1f64, 1f64, 1f64, Point::new(0f64, 0f64));
+        let id = 1usize;
+
+        let _ = location_hash.add_or_update(id, Point::new(0f64, 0f64));
+
+        println!("{:?}", location_hash);
+
+        let agents = location_hash.get_neighbours_in_radius(1.1, Point::new(0f64, 0f64));
+        assert_eq!(agents.len(), 1usize);
+
+        println!("{:?}", location_hash);
+
+        location_hash.remove_agent(id);
+        let agents = location_hash.get_neighbours_in_radius(1.1, Point::new(0f64, 0f64));
+        assert_eq!(agents.len(), 0usize);
+
+        println!("{:?}", location_hash);
     }
 }

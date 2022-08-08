@@ -7,11 +7,29 @@ pub mod highlevel_planners;
 pub mod local_planners;
 pub mod map_representation;
 pub mod spatial_index;
+pub mod source_sink;
+
+mod util;
 
 pub use crate::highlevel_planners::highlevel_planners::HighLevelPlanner;
 pub use crate::local_planners::local_planner::LocalPlanner;
 pub use crate::map_representation::map::Map;
 pub use crate::spatial_index::spatial_index::SpatialIndex;
+use crate::source_sink::source_sink::SourceSink;
+use crate::util::registry::Registry;
+
+/// Listen to events. This is how an external application should interface
+/// with the simulator.
+pub trait EventListener
+{
+    /// Called each time an agent is spawned
+    /// TODO(arjo): Is it worth doing this or using a single function call
+    /// at the end.
+    fn agent_spawned(&mut self, position: Vec2f, agent: AgentId);
+
+    /// Called each time an agent is destroyed
+    fn agent_destroyed(&mut self, agent: AgentId);
+}
 
 /// Agent  ID
 pub type AgentId = usize;
@@ -39,6 +57,7 @@ pub struct Agent {
     /// Angular velocity of agent
     pub angular_vel: f64,
     /// Eyesight range: How far each individual agent can "see"
+    /// TODO(arjo): Replace with "Agent Property" hashmap.
     pub eyesight_range: f64,
 }
 
@@ -46,6 +65,8 @@ pub struct Agent {
 pub struct Simulation<M: Map, T: SpatialIndex> {
     /// List of all active agents
     pub agents: HashMap<AgentId, Agent>,
+    /// List of all sources and sink.
+    source_sinks: Registry<Arc<SourceSink<M>>>,
     /// Spatial Index. Used internally to
     spatial_index: T,
     /// Map ARC
@@ -58,23 +79,29 @@ pub struct Simulation<M: Map, T: SpatialIndex> {
     sim_time: std::time::Duration,
     /// Get last allocated agent id
     last_alloc_agent_id: usize,
-    /// Update buffer: Ideally we would not need this if I had done a better job of the update loop
+    /// Update buffer: Ideally we would not need this if
+    /// I had done a better job of the update loop
     update_buffer: HashMap<AgentId, StateUpdateBuffer>,
+    /// Event listeners
+    event_listeners: Registry<Arc<Mutex<dyn EventListener>>>,
+    /// Contains the correspondence between agents and their source/sinks
+    source_sink_agent_correspondence: HashMap<AgentId, usize>
 }
 
-/// Just to keep rust happy TODO: Remove this
+/// Internal state update buffer structure
 struct StateUpdateBuffer {
     new_vel: Vec2f,
     new_pos: Vec2f,
     updated: bool,
 }
 
-///
 impl<M: Map, T: SpatialIndex> Simulation<M, T> {
+
     /// Create a new simulation environment
     pub fn new(map: Arc<M>, spatial_index: T) -> Self {
         Self {
             agents: HashMap::new(),
+            source_sinks: Registry::new(),
             map: map,
             spatial_index: spatial_index,
             high_level_planner: HashMap::new(),
@@ -82,9 +109,12 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
             sim_time: std::time::Duration::new(0, 0),
             last_alloc_agent_id: 0,
             update_buffer: HashMap::new(),
+            event_listeners: Registry::new(),
+            source_sink_agent_correspondence: HashMap::new()
         }
     }
 
+    /// Adds a group of agents
     pub fn add_agents(
         &mut self,
         spawn_positions: &Vec<Point>,
@@ -118,10 +148,33 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
                 return Err(error_message);
             }
             res.push(agent_id);
+            for listener in self.event_listeners.registry.values() {
+                listener.lock().unwrap().agent_spawned(*x, agent_id);
+            }
         }
         Ok(res)
     }
 
+    /// Adds a source-sink. Returns the id of the source/sink.
+    pub fn add_source_sink(&mut self, source_sink: Arc<SourceSink<M>>) -> usize {
+        self.source_sinks.add_new_item(source_sink)
+    }
+
+    /// Removes a source-sink
+    pub fn remove_source_sink(&mut self, id: &usize)
+    {
+        // TODO(arjo): Fix this method to remove crowds spawned by
+        // registry as well
+        self.source_sinks.registry.remove_entry(id);
+    }
+
+    /// Adds an event listener
+    pub fn add_event_listener(&mut self, event_listener: Arc<Mutex<dyn EventListener>>) -> usize
+    {
+        self.event_listeners.add_new_item(event_listener)
+    }
+
+    /// removes a set of agents
     pub fn remove_agents(&mut self, agent: AgentId) {
         self.high_level_planner[&agent]
             .lock()
@@ -133,9 +186,52 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
             .remove_agent(agent);
         self.agents.remove_entry(&agent);
         self.update_buffer.remove_entry(&agent);
+        self.source_sink_agent_correspondence.remove_entry(&agent);
+        self.spatial_index.remove_agent(agent);
+        for listener in self.event_listeners.registry.values() {
+            listener.lock().unwrap().agent_destroyed(agent);
+        }
     }
 
     pub fn step(&mut self, dur: std::time::Duration) -> Result<(), String> {
+
+        // Spawn agents using source sinks.
+        // TODO(arjo): lots of unessecary allocations going on here to keep
+        // the borrow checker happy
+        let to_add: Vec<(usize, Arc<SourceSink<M>>, Vec<Vec2f>)> =
+            self.source_sinks.registry.iter().map(|(source_sink_id, source_sink)| {
+            let spawn_number =
+                source_sink.crowd_generator.get_number_to_spawn(dur);
+            // TODO(arjo): deconflict spawn points.
+            let mut agent_spawn_points = vec!();
+            for i in 0..spawn_number {
+                agent_spawn_points.push(source_sink.source);
+            }
+            (*source_sink_id, source_sink.clone(), agent_spawn_points)
+        }).collect();
+        let to_add: Vec<(usize, Result<Vec<usize>, String>)> = to_add.iter()
+        .map(|(source_id, source_sink, agents)| {
+            let agents = self.add_agents(
+                &agents,
+                source_sink.high_level_planner.clone(),
+                source_sink.local_planner.clone(),
+                source_sink.agent_eyesight_range);
+            (*source_id, agents)
+        }).collect();
+
+        for (source_id, agents) in to_add {
+            if let Ok(agents) = agents {
+                for agent in agents {
+                    self.source_sink_agent_correspondence.insert(agent, source_id);
+                }
+            }
+            else
+            {
+                return Err("Failed to add agents from source".to_string());
+            }
+        }
+
+        // Calculate motion updates
         for agent_id in self.agents.keys() {
             let mut agent = self.agents.get(agent_id).unwrap().clone();
             // Execute the high level plan
@@ -177,9 +273,6 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
             let pos = agent.position;
             let new_pos = pos + dx;
 
-            // let mut agent_mut = self.agents.get_mut(agent_id).unwrap();
-            // agent_mut.position = new_pos;
-            // agent_mut.velocity = vel;
             self.update_buffer.insert(
                 *agent_id,
                 StateUpdateBuffer {
@@ -195,6 +288,7 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
             }
         }
 
+        // Commit updates
         for (id, state_update) in self.update_buffer.iter_mut() {
             if !state_update.updated {
                 continue;
@@ -203,6 +297,23 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
             agent.velocity = state_update.new_vel;
             agent.position = state_update.new_pos;
             state_update.updated = false;
+        }
+
+        // Remove agents
+        let mut to_be_removed:Vec<AgentId> = vec!();
+        for (sink_id, source_sink) in self.source_sinks.registry.iter()
+        {
+            let candidates_to_be_removed =
+                self.spatial_index.get_neighbours_in_radius(
+                    source_sink.radius_sink, source_sink.sink);
+            to_be_removed.extend(candidates_to_be_removed.iter().filter(|candidate| {
+                let res = self.source_sink_agent_correspondence.get(candidate);
+                matches!(res, Some(x) if *x == *sink_id)
+            }));
+        }
+
+        for i in to_be_removed {
+            self.remove_agents(i);
         }
 
         Ok(())
@@ -271,9 +382,9 @@ mod tests {
         let mut crowd_simulation = Simulation::new(map, stub_spatial);
         let agent_start_positions = vec![Point::new(0f64, 0f64)];
         let high_level_planner = Arc::new(Mutex::new(StubHighLevelPlan::new(velocity)));
-        let mut local_planner = Arc::new(Mutex::new(local_planners::no_local_plan::NoLocalPlan {}));
+        let local_planner = Arc::new(Mutex::new(local_planners::no_local_plan::NoLocalPlan {}));
 
-        assert_eq!(crowd_simulation.agents.len(), 0u64 as usize);
+        assert_eq!(crowd_simulation.agents.len(), 0usize);
 
         let agents = crowd_simulation.add_agents(
             &agent_start_positions,
@@ -281,11 +392,12 @@ mod tests {
             local_planner,
             100f64,
         );
-        assert_eq!(crowd_simulation.agents.len(), 1u64 as usize);
+        assert!(matches!(agents, Ok(agent) if agent.len() == 1usize));
+        assert_eq!(crowd_simulation.agents.len(), 1usize);
 
         let res = crowd_simulation.step(step_size);
         assert_eq!(res, Ok(()));
-        assert_eq!(crowd_simulation.agents.len(), 1u64 as usize);
+        assert_eq!(crowd_simulation.agents.len(), 1usize);
 
         assert!((crowd_simulation.agents[&(0u64 as usize)].position - velocity).norm() < 1e-5f64);
     }
