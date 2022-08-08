@@ -372,9 +372,12 @@ mod tests {
         let mut location_hash = LocationHash2D::new(2f64, 2f64, 1f64, Point::new(0f64, 0f64));
         let id = 1usize;
         let _ = location_hash.add_or_update(id, Point::new(0f64, 0f64));
-
-
+        let agents = location_hash.get_neighbours_in_radius(1f64, Point::new(0f64, 0f64));
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0], 1usize);
         let _ = location_hash.add_or_update(id, Point::new(1f64, 0f64));
+        let agents = location_hash.get_neighbours_in_radius(1f64, Point::new(0f64, 0f64));
+        assert_eq!(agents.len(), 0);
     }
 
     // Tests the removal of a point
@@ -385,17 +388,11 @@ mod tests {
 
         let _ = location_hash.add_or_update(id, Point::new(0f64, 0f64));
 
-        println!("{:?}", location_hash);
-
         let agents = location_hash.get_neighbours_in_radius(1.1, Point::new(0f64, 0f64));
         assert_eq!(agents.len(), 1usize);
-
-        println!("{:?}", location_hash);
 
         location_hash.remove_agent(id);
         let agents = location_hash.get_neighbours_in_radius(1.1, Point::new(0f64, 0f64));
         assert_eq!(agents.len(), 0usize);
-
-        println!("{:?}", location_hash);
     }
 }
