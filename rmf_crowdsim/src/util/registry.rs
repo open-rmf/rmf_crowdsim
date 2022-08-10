@@ -1,17 +1,15 @@
 use std::collections::HashMap;
 
-pub struct Registry<T>
-{
+pub struct Registry<T> {
     pub registry: HashMap<usize, T>,
-    counter: usize
+    counter: usize,
 }
 
 impl<T> Registry<T> {
-
     pub fn new() -> Self {
         Registry {
             registry: HashMap::new(),
-            counter: 0
+            counter: 0,
         }
     }
 

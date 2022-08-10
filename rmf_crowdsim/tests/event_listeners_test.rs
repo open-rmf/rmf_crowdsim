@@ -1,7 +1,7 @@
 use rmf_crowdsim::local_planners::no_local_plan::NoLocalPlan;
+use rmf_crowdsim::source_sink::source_sink::{MonotonicCrowd, SourceSink};
 use rmf_crowdsim::spatial_index::location_hash_2d::LocationHash2D;
 use rmf_crowdsim::spatial_index::spatial_index::SpatialIndex;
-use rmf_crowdsim::source_sink::source_sink::{SourceSink, MonotonicCrowd};
 use rmf_crowdsim::*;
 use std::sync::{Arc, Mutex};
 
@@ -51,37 +51,32 @@ impl<M: Map> HighLevelPlanner<M> for StubHighLevelPlan {
 #[derive(Debug)]
 struct MockEventListener {
     pub added: Vec<AgentId>,
-    pub removed: Vec<AgentId>
+    pub removed: Vec<AgentId>,
 }
 
 impl MockEventListener {
-    pub fn new() -> Self
-    {
+    pub fn new() -> Self {
         MockEventListener {
-            added: vec!(),
-            removed: vec!()
+            added: vec![],
+            removed: vec![],
         }
     }
 }
 
 impl EventListener for MockEventListener {
-
-    fn agent_spawned(&mut self, position: Vec2f, agent: AgentId)
-    {
+    fn agent_spawned(&mut self, position: Vec2f, agent: AgentId) {
         self.added.push(agent);
     }
 
     /// Called each time an agent is destroyed
-    fn agent_destroyed(&mut self, agent: AgentId)
-    {
+    fn agent_destroyed(&mut self, agent: AgentId) {
         println!("Removed {}", agent);
         self.removed.push(agent);
     }
 }
 
 #[test]
-fn test_event_listener_source_sink_api()
-{
+fn test_event_listener_source_sink_api() {
     let map = Arc::new(NoMap {});
     let velocity = Vec2f::new(1.0f64, 0.0f64);
     let step_size = std::time::Duration::new(1, 0);
@@ -105,7 +100,7 @@ fn test_event_listener_source_sink_api()
         crowd_generator: crowd_generator,
         high_level_planner: high_level_planner,
         local_planner: local_planner,
-        agent_eyesight_range: 5f64
+        agent_eyesight_range: 5f64,
     });
 
     let event_listener = Arc::new(Mutex::new(MockEventListener::new()));
@@ -113,17 +108,18 @@ fn test_event_listener_source_sink_api()
     crowd_simulation.add_event_listener(event_listener.clone());
     crowd_simulation.add_source_sink(source_sink);
 
-    for steps in 0usize..20usize
-    {
+    for steps in 0usize..20usize {
         assert_eq!(crowd_simulation.agents.len(), steps);
         assert_eq!(event_listener.lock().unwrap().added.len(), steps);
         crowd_simulation.step(step_size);
     }
-    for steps in 20usize..25usize
-    {
+    for steps in 20usize..25usize {
         assert_eq!(crowd_simulation.agents.len(), 19usize);
         assert_eq!(event_listener.lock().unwrap().added.len(), steps);
-        assert_eq!(event_listener.lock().unwrap().removed.len(), steps-19usize);
+        assert_eq!(
+            event_listener.lock().unwrap().removed.len(),
+            steps - 19usize
+        );
         crowd_simulation.step(step_size);
     }
 }
