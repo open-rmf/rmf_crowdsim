@@ -66,7 +66,7 @@ impl CrowdGenerator for PoissonCrowd
         let rt = time_elapsed.as_secs_f64() * self.rate;
         let mut rng = rand::thread_rng();
         let n = Poisson::new(rt).unwrap();
-        n.sample(&mut rng) as usize;
+        n.sample(&mut rng) as usize
     }
 }
 
