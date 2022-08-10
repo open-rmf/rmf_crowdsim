@@ -6,6 +6,11 @@ use crate::highlevel_planners::highlevel_planners::HighLevelPlanner;
 use crate::local_planners::local_planner::LocalPlanner;
 use crate::map_representation::map::Map;
 
+use rand::distributions::Distribution;
+
+use statrs::distribution::{Poisson, Discrete};
+use statrs::prec;
+
 /// Trait for crowd generation
 pub trait CrowdGenerator
 {
@@ -58,8 +63,10 @@ impl CrowdGenerator for PoissonCrowd
 
     fn get_number_to_spawn(&self, time_elapsed: Duration) -> usize
     {
-        //let num_spawned = time_elapsed.as_secs_f64() * rate;
-        0 as usize
+        let rt = time_elapsed.as_secs_f64() * self.rate;
+        let mut rng = rand::thread_rng();
+        let n = Poisson::new(rt).unwrap();
+        n.sample(&mut rng) as usize;
     }
 }
 
