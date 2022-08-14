@@ -53,6 +53,7 @@ impl PoissonCrowd {
 impl CrowdGenerator for PoissonCrowd {
     fn get_number_to_spawn(&self, time_elapsed: Duration) -> usize {
         let rt = time_elapsed.as_secs_f64() * self.rate;
+        //println!("Poisson rate {}", rt);
         let mut rng = rand::thread_rng();
         let n = Poisson::new(rt).unwrap();
         n.sample(&mut rng) as usize

@@ -1,7 +1,5 @@
 use rmf_crowdsim::local_planners::no_local_plan::NoLocalPlan;
 use rmf_crowdsim::source_sink::source_sink::{MonotonicCrowd, SourceSink};
-use rmf_crowdsim::spatial_index::location_hash_2d::LocationHash2D;
-use rmf_crowdsim::spatial_index::spatial_index::SpatialIndex;
 use rmf_crowdsim::*;
 use std::sync::{Arc, Mutex};
 

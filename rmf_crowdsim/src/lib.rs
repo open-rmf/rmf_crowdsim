@@ -225,6 +225,14 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
                 for agent in agents {
                     self.source_sink_agent_correspondence
                         .insert(agent, source_id);
+                    self.high_level_planner[&agent].lock().unwrap().set_target(
+                        &self.agents[&agent],
+                        self.source_sinks.registry[&source_id].sink,
+                        Vec2f::new(
+                            self.source_sinks.registry[&source_id].radius_sink,
+                            self.source_sinks.registry[&source_id].radius_sink,
+                        ),
+                    );
                 }
             } else {
                 return Err("Failed to add agents from source".to_string());
@@ -233,6 +241,7 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
 
         // Calculate motion updates
         for agent_id in self.agents.keys() {
+            // Safe to unwrap as agent_id definitely exists.
             let mut agent = self.agents.get(agent_id).unwrap().clone();
             // Execute the high level plan
             let mut vel = Vec2f::new(0f64, 0f64);
