@@ -41,7 +41,7 @@ impl<M: Map> HighLevelPlanner<M> for StubHighLevelPlan {
         // Do nothing
     }
 
-    fn set_map(&mut self, _map: Arc<M>) {
+    fn set_map(&mut self, _map: Arc<Mutex<M>>) {
         // Do nothing
     }
 }
@@ -75,7 +75,7 @@ impl EventListener for MockEventListener {
 
 #[test]
 fn test_event_listener_source_sink_api() {
-    let map = Arc::new(NoMap {});
+    let map = Arc::new(Mutex::new(NoMap {}));
     let velocity = Vec2f::new(1.0f64, 0.0f64);
     let step_size = std::time::Duration::new(1, 0);
     let stub_spatial = spatial_index::location_hash_2d::LocationHash2D::new(

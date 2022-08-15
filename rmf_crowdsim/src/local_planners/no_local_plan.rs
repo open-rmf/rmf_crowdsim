@@ -3,7 +3,7 @@ use crate::map_representation::map::Map;
 use crate::Agent;
 use crate::Vec2f;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct NoLocalPlan {}
 
@@ -13,7 +13,7 @@ impl<M: Map> LocalPlanner<M> for NoLocalPlan {
         _agent: &Agent,
         _nearby_agents: &Vec<Agent>,
         recommended_velocity: Vec2f,
-        _map: Arc<M>,
+        _map: Arc<Mutex<M>>,
     ) -> Vec2f {
         recommended_velocity
     }

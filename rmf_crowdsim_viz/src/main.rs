@@ -47,7 +47,7 @@ impl<M: Map> HighLevelPlanner<M> for StubHighLevelPlan {
         // Do nothing
     }
 
-    fn set_map(&mut self, _map: Arc<M>) {
+    fn set_map(&mut self, _map: Arc<Mutex<M>>) {
         // Do nothing
     }
 }
@@ -74,7 +74,7 @@ struct SimulationModel<M: Map, T: SpatialIndex> {
 
 /// Setup the model
 fn create_crowd_model(_app: &App) -> SimulationModel<NoMap, LocationHash2D> {
-    let map = Arc::new(NoMap {});
+    let map = Arc::new(Mutex::new(NoMap {}));
     let stub_spatial = LocationHash2D::new(1000f64, 1000f64, 20f64, Point::new(-500f64, -500f64));
     let mut model = SimulationModel::<NoMap, LocationHash2D> {
         crowd_simulation: Simulation::<NoMap, LocationHash2D>::new(map, stub_spatial),

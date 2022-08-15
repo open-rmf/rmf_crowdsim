@@ -5,7 +5,7 @@ use crate::AgentId;
 use crate::Vec2f;
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct Zanlungo {
     agent_scale: f64,
@@ -205,7 +205,7 @@ impl<M: Map> LocalPlanner<M> for Zanlungo {
         agent: &Agent,
         nearby_agents: &Vec<Agent>,
         recommended_velocity: Vec2f,
-        map: Arc<M>,
+        map: Arc<Mutex<M>>,
     ) -> Vec2f {
         let t_i = self.compute_tti(agent, nearby_agents);
 

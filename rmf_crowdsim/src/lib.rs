@@ -69,7 +69,7 @@ pub struct Simulation<M: Map, T: SpatialIndex> {
     /// Spatial Index. Used internally to
     spatial_index: T,
     /// Map ARC
-    map: Arc<M>,
+    map: Arc<Mutex<M>>,
     /// High level planning
     high_level_planner: HashMap<AgentId, Arc<Mutex<dyn HighLevelPlanner<M>>>>,
     /// Local avoidance strategy
@@ -96,7 +96,7 @@ struct StateUpdateBuffer {
 
 impl<M: Map, T: SpatialIndex> Simulation<M, T> {
     /// Create a new simulation environment
-    pub fn new(map: Arc<M>, spatial_index: T) -> Self {
+    pub fn new(map: Arc<Mutex<M>>, spatial_index: T) -> Self {
         Self {
             agents: HashMap::new(),
             source_sinks: Registry::new(),
@@ -371,14 +371,14 @@ mod tests {
             // Do nothing
         }
 
-        fn set_map(&mut self, _map: Arc<M>) {
+        fn set_map(&mut self, _map: Arc<Mutex<M>>) {
             // Do nothing
         }
     }
 
     #[test]
     fn test_step_integration() {
-        let map = Arc::new(NoMap {});
+        let map = Arc::new(Mutex::new(NoMap {}));
         let velocity = Vec2f::new(1.0f64, 0.0f64);
         let step_size = std::time::Duration::new(1, 0);
         let stub_spatial = spatial_index::location_hash_2d::LocationHash2D::new(
