@@ -1,5 +1,4 @@
 use crate::local_planners::local_planner::LocalPlanner;
-use crate::map_representation::map::Map;
 use crate::Agent;
 use crate::AgentId;
 use crate::Vec2f;
@@ -199,13 +198,12 @@ impl Zanlungo {
     }
 }
 
-impl<M: Map> LocalPlanner<M> for Zanlungo {
+impl LocalPlanner for Zanlungo {
     fn get_desired_velocity(
         &self,
         agent: &Agent,
         nearby_agents: &Vec<Agent>,
         recommended_velocity: Vec2f,
-        map: Arc<Mutex<M>>,
     ) -> Vec2f {
         let t_i = self.compute_tti(agent, nearby_agents);
 

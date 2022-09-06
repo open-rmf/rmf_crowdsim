@@ -5,7 +5,6 @@ use na::Vector2;
 
 pub mod highlevel_planners;
 pub mod local_planners;
-pub mod map_representation;
 pub mod source_sink;
 pub mod spatial_index;
 
@@ -13,7 +12,6 @@ mod util;
 
 pub use crate::highlevel_planners::highlevel_planners::HighLevelPlanner;
 pub use crate::local_planners::local_planner::LocalPlanner;
-pub use crate::map_representation::map::Map;
 use crate::source_sink::source_sink::SourceSink;
 pub use crate::spatial_index::spatial_index::SpatialIndex;
 use crate::util::registry::Registry;
@@ -61,19 +59,17 @@ pub struct Agent {
 }
 
 /// A representation of a simulation session
-pub struct Simulation<M: Map, T: SpatialIndex> {
+pub struct Simulation<T: SpatialIndex> {
     /// List of all active agents
     pub agents: HashMap<AgentId, Agent>,
     /// List of all sources and sink.
-    source_sinks: Registry<Arc<SourceSink<M>>>,
+    source_sinks: Registry<Arc<SourceSink>>,
     /// Spatial Index. Used internally to
     spatial_index: T,
-    /// Map ARC
-    map: Arc<Mutex<M>>,
     /// High level planning
-    high_level_planner: HashMap<AgentId, Arc<Mutex<dyn HighLevelPlanner<M>>>>,
+    high_level_planner: HashMap<AgentId, Arc<Mutex<dyn HighLevelPlanner>>>,
     /// Local avoidance strategy
-    local_planner: HashMap<AgentId, Arc<Mutex<dyn LocalPlanner<M>>>>,
+    local_planner: HashMap<AgentId, Arc<Mutex<dyn LocalPlanner>>>,
     /// Simulation time
     sim_time: std::time::Duration,
     /// Get last allocated agent id
@@ -94,13 +90,12 @@ struct StateUpdateBuffer {
     updated: bool,
 }
 
-impl<M: Map, T: SpatialIndex> Simulation<M, T> {
+impl<T: SpatialIndex> Simulation<T> {
     /// Create a new simulation environment
-    pub fn new(map: Arc<Mutex<M>>, spatial_index: T) -> Self {
+    pub fn new(spatial_index: T) -> Self {
         Self {
             agents: HashMap::new(),
             source_sinks: Registry::new(),
-            map: map,
             spatial_index: spatial_index,
             high_level_planner: HashMap::new(),
             local_planner: HashMap::new(),
@@ -116,16 +111,14 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
     pub fn add_agents(
         &mut self,
         spawn_positions: &Vec<Point>,
-        high_level_planner: Arc<Mutex<dyn HighLevelPlanner<M>>>,
-        local_planner: Arc<Mutex<dyn LocalPlanner<M>>>,
+        high_level_planner: Arc<Mutex<dyn HighLevelPlanner>>,
+        local_planner: Arc<Mutex<dyn LocalPlanner>>,
         agent_eyesight_range: f64,
     ) -> Result<Vec<AgentId>, String> {
         let mut res = Vec::<AgentId>::new();
         for x in spawn_positions {
             let agent_id = self.last_alloc_agent_id;
             self.last_alloc_agent_id += 1;
-            // HUGE RED FLAGS
-            high_level_planner.lock().unwrap().set_map(self.map.clone());
             self.high_level_planner
                 .insert(agent_id, high_level_planner.clone());
             self.local_planner.insert(agent_id, local_planner.clone());
@@ -154,7 +147,7 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
     }
 
     /// Adds a source-sink. Returns the id of the source/sink.
-    pub fn add_source_sink(&mut self, source_sink: Arc<SourceSink<M>>) -> usize {
+    pub fn add_source_sink(&mut self, source_sink: Arc<SourceSink>) -> usize {
         self.source_sinks.add_new_item(source_sink)
     }
 
@@ -193,7 +186,7 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
         // Spawn agents using source sinks.
         // TODO(arjo): lots of unessecary allocations going on here to keep
         // the borrow checker happy
-        let to_add: Vec<(usize, Arc<SourceSink<M>>, Vec<Vec2f>)> = self
+        let to_add: Vec<(usize, Arc<SourceSink>, Vec<Vec2f>)> = self
             .source_sinks
             .registry
             .iter()
@@ -272,8 +265,7 @@ impl<M: Map, T: SpatialIndex> Simulation<M, T> {
                 vel = local_planner.lock().unwrap().get_desired_velocity(
                     &agent,
                     &neighbours,
-                    vel,
-                    self.map.clone(),
+                    vel
                 );
             }
 
@@ -333,14 +325,6 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
-    struct NoMap {}
-
-    impl Map for NoMap {
-        fn get_occupancy(&self, _pt: Point) -> Option<bool> {
-            return Some(true);
-        }
-    }
-
     struct StubHighLevelPlan {
         default_vel: Vec2f,
     }
@@ -353,7 +337,7 @@ mod tests {
         }
     }
 
-    impl<M: Map> HighLevelPlanner<M> for StubHighLevelPlan {
+    impl HighLevelPlanner for StubHighLevelPlan {
         fn get_desired_velocity(
             &mut self,
             _agent: &Agent,
@@ -370,15 +354,10 @@ mod tests {
         fn remove_agent_id(&mut self, _agent: AgentId) {
             // Do nothing
         }
-
-        fn set_map(&mut self, _map: Arc<Mutex<M>>) {
-            // Do nothing
-        }
     }
 
     #[test]
     fn test_step_integration() {
-        let map = Arc::new(Mutex::new(NoMap {}));
         let velocity = Vec2f::new(1.0f64, 0.0f64);
         let step_size = std::time::Duration::new(1, 0);
         let stub_spatial = spatial_index::location_hash_2d::LocationHash2D::new(
@@ -387,7 +366,7 @@ mod tests {
             20f64,
             Point::new(-500f64, -500f64),
         );
-        let mut crowd_simulation = Simulation::new(map, stub_spatial);
+        let mut crowd_simulation = Simulation::new(stub_spatial);
         let agent_start_positions = vec![Point::new(0f64, 0f64)];
         let high_level_planner = Arc::new(Mutex::new(StubHighLevelPlan::new(velocity)));
         let local_planner = Arc::new(Mutex::new(local_planners::no_local_plan::NoLocalPlan {}));

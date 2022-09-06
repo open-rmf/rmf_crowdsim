@@ -5,14 +5,6 @@ use rmf_crowdsim::spatial_index::spatial_index::SpatialIndex;
 use rmf_crowdsim::*;
 use std::sync::{Arc, Mutex};
 
-struct NoMap {}
-
-impl Map for NoMap {
-    fn get_occupancy(&self, _pt: Point) -> Option<bool> {
-        return Some(true);
-    }
-}
-
 struct StubHighLevelPlan {
     default_vel: Vec2f,
 }
@@ -25,7 +17,7 @@ impl StubHighLevelPlan {
     }
 }
 
-impl<M: Map> HighLevelPlanner<M> for StubHighLevelPlan {
+impl HighLevelPlanner for StubHighLevelPlan {
     fn get_desired_velocity(
         &mut self,
         _agent: &Agent,
@@ -46,10 +38,6 @@ impl<M: Map> HighLevelPlanner<M> for StubHighLevelPlan {
     fn remove_agent_id(&mut self, _agent: AgentId) {
         // Do nothing
     }
-
-    fn set_map(&mut self, _map: Arc<Mutex<M>>) {
-        // Do nothing
-    }
 }
 
 struct StubSpatialIndex {}
@@ -68,16 +56,15 @@ impl SpatialIndex for StubSpatialIndex {
     }
 }
 
-struct SimulationModel<M: Map, T: SpatialIndex> {
-    crowd_simulation: Simulation<M, T>,
+struct SimulationModel<T: SpatialIndex> {
+    crowd_simulation: Simulation<T>,
 }
 
 /// Setup the model
-fn create_crowd_model(_app: &App) -> SimulationModel<NoMap, LocationHash2D> {
-    let map = Arc::new(Mutex::new(NoMap {}));
+fn create_crowd_model(_app: &App) -> SimulationModel<LocationHash2D> {
     let stub_spatial = LocationHash2D::new(1000f64, 1000f64, 20f64, Point::new(-500f64, -500f64));
-    let mut model = SimulationModel::<NoMap, LocationHash2D> {
-        crowd_simulation: Simulation::<NoMap, LocationHash2D>::new(map, stub_spatial),
+    let mut model = SimulationModel::<LocationHash2D> {
+        crowd_simulation: Simulation::<LocationHash2D>::new(stub_spatial),
     };
 
     let agent_start_positions = vec![
@@ -114,7 +101,7 @@ fn main() {
         .run();
 }
 
-fn update(_app: &App, model: &mut SimulationModel<NoMap, LocationHash2D>, update: Update) {
+fn update(_app: &App, model: &mut SimulationModel<LocationHash2D>, update: Update) {
     let res = model.crowd_simulation.step(update.since_last);
 
     if let Err(error_message) = res {
@@ -122,7 +109,7 @@ fn update(_app: &App, model: &mut SimulationModel<NoMap, LocationHash2D>, update
     }
 }
 
-fn view(app: &App, model: &SimulationModel<NoMap, LocationHash2D>, frame: Frame) {
+fn view(app: &App, model: &SimulationModel<LocationHash2D>, frame: Frame) {
     // Begin drawing
     let draw = app.draw();
 

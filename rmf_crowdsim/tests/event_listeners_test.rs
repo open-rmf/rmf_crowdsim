@@ -3,14 +3,6 @@ use rmf_crowdsim::source_sink::source_sink::{MonotonicCrowd, SourceSink};
 use rmf_crowdsim::*;
 use std::sync::{Arc, Mutex};
 
-struct NoMap {}
-
-impl Map for NoMap {
-    fn get_occupancy(&self, _pt: Point) -> Option<bool> {
-        return Some(true);
-    }
-}
-
 struct StubHighLevelPlan {
     default_vel: Vec2f,
 }
@@ -23,7 +15,7 @@ impl StubHighLevelPlan {
     }
 }
 
-impl<M: Map> HighLevelPlanner<M> for StubHighLevelPlan {
+impl HighLevelPlanner for StubHighLevelPlan {
     fn get_desired_velocity(
         &mut self,
         _agent: &Agent,
@@ -38,10 +30,6 @@ impl<M: Map> HighLevelPlanner<M> for StubHighLevelPlan {
     }
     /// Remove an agent
     fn remove_agent_id(&mut self, _agent: AgentId) {
-        // Do nothing
-    }
-
-    fn set_map(&mut self, _map: Arc<Mutex<M>>) {
         // Do nothing
     }
 }
@@ -75,7 +63,6 @@ impl EventListener for MockEventListener {
 
 #[test]
 fn test_event_listener_source_sink_api() {
-    let map = Arc::new(Mutex::new(NoMap {}));
     let velocity = Vec2f::new(1.0f64, 0.0f64);
     let step_size = std::time::Duration::new(1, 0);
     let stub_spatial = spatial_index::location_hash_2d::LocationHash2D::new(
@@ -87,11 +74,11 @@ fn test_event_listener_source_sink_api() {
     let high_level_planner = Arc::new(Mutex::new(StubHighLevelPlan::new(velocity)));
     let local_planner = Arc::new(Mutex::new(NoLocalPlan {}));
 
-    let mut crowd_simulation = Simulation::new(map, stub_spatial);
+    let mut crowd_simulation = Simulation::new(stub_spatial);
 
     let crowd_generator = Arc::new(MonotonicCrowd::new(1f64));
 
-    let source_sink = Arc::new(SourceSink::<NoMap> {
+    let source_sink = Arc::new(SourceSink {
         source: Vec2f::new(0f64, 0f64),
         sink: Vec2f::new(20f64, 0f64),
         radius_sink: 1f64,

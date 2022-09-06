@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use crate::highlevel_planners::highlevel_planners::HighLevelPlanner;
 use crate::local_planners::local_planner::LocalPlanner;
-use crate::map_representation::map::Map;
 
 use rand::distributions::Distribution;
 
@@ -17,7 +16,7 @@ pub trait CrowdGenerator {
 }
 
 /// Serves as a source and a sink component.
-pub struct SourceSink<M: Map> {
+pub struct SourceSink {
     /// The source location
     pub source: Vec2f,
 
@@ -31,10 +30,10 @@ pub struct SourceSink<M: Map> {
     pub crowd_generator: Arc<dyn CrowdGenerator>,
 
     /// High level planning
-    pub high_level_planner: Arc<Mutex<dyn HighLevelPlanner<M>>>,
+    pub high_level_planner: Arc<Mutex<dyn HighLevelPlanner>>,
 
     /// Local avoidance strategy
-    pub local_planner: Arc<Mutex<dyn LocalPlanner<M>>>,
+    pub local_planner: Arc<Mutex<dyn LocalPlanner>>,
 
     /// Eyesight (TODO(arjo): Replace with AgentProperties)
     pub agent_eyesight_range: f64,
