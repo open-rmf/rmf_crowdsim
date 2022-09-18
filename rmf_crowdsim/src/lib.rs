@@ -7,6 +7,7 @@ pub mod highlevel_planners;
 pub mod local_planners;
 pub mod source_sink;
 pub mod spatial_index;
+pub mod rmf;
 
 mod util;
 
@@ -194,9 +195,16 @@ impl<T: SpatialIndex> Simulation<T> {
                 let spawn_number = source_sink.crowd_generator.get_number_to_spawn(dur);
                 // TODO(arjo): deconflict spawn points.
                 let mut agent_spawn_points = vec![];
-                for i in 0..spawn_number {
-                    agent_spawn_points.push(source_sink.source);
+                //for i in 0..spawn_number {
+                if spawn_number > 0 {
+                    /// TODO: Remove hard coded constant
+                    let neighbours = self.spatial_index.get_neighbours_in_radius(0.4, source_sink.source);
+                    if neighbours.len() == 0
+                    {
+                        agent_spawn_points.push(source_sink.source);
+                    }
                 }
+                //}
                 (*source_sink_id, source_sink.clone(), agent_spawn_points)
             })
             .collect();

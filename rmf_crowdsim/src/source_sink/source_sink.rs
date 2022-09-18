@@ -36,7 +36,7 @@ pub struct SourceSink {
     pub local_planner: Arc<Mutex<dyn LocalPlanner>>,
 
     /// Eyesight (TODO(arjo): Replace with AgentProperties)
-    pub agent_eyesight_range: f64,
+    pub agent_eyesight_range: f64
 }
 
 pub struct PoissonCrowd {
