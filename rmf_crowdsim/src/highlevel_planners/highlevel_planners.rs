@@ -14,4 +14,3 @@ pub trait HighLevelPlanner {
     /// Remove an agent
     fn remove_agent_id(&mut self, _agent: AgentId) {}
 }
-4
