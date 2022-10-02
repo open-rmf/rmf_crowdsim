@@ -66,7 +66,7 @@ pub struct Agent {
 
 /// A representation of a simulation session
 pub struct Simulation<T: SpatialIndex> {
-    /// List of all active agents
+    /// List of all active agents. This holds the simulation state.
     pub agents: HashMap<AgentId, Agent>,
     /// List of all sources and sink.
     source_sinks: Registry<Arc<SourceSink>>,
