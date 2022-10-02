@@ -56,7 +56,7 @@ pub struct SourceSink {
     pub loop_forever: bool,
 
     /// Eyesight (TODO(arjo): Replace with AgentProperties)
-    pub agent_eyesight_range: f64
+    pub agent_eyesight_range: f64,
 }
 
 /// A crowd generator that uses the poisson function.

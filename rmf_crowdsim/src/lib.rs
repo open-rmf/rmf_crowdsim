@@ -5,9 +5,9 @@ use na::Vector2;
 
 pub mod highlevel_planners;
 pub mod local_planners;
+pub mod rmf;
 pub mod source_sink;
 pub mod spatial_index;
-pub mod rmf;
 
 mod util;
 
@@ -94,7 +94,7 @@ struct StateUpdateBuffer {
     new_vel: Vec2f,
     new_pos: Vec2f,
     updated: bool,
-    next_waypoint: usize
+    next_waypoint: usize,
 }
 
 impl<T: SpatialIndex> Simulation<T> {
@@ -208,10 +208,10 @@ impl<T: SpatialIndex> Simulation<T> {
                     /// TODO: Remove hard coded constant. Ideally we should have
                     /// a queue that gets popped if more than one agent is
                     /// spawned
-                    let neighbours = self.spatial_index.get_neighbours_in_radius(
-                        0.4, source_sink.source);
-                    if neighbours.len() == 0
-                    {
+                    let neighbours = self
+                        .spatial_index
+                        .get_neighbours_in_radius(0.4, source_sink.source);
+                    if neighbours.len() == 0 {
                         agent_spawn_points.push(source_sink.source);
                     }
                 }
@@ -252,7 +252,6 @@ impl<T: SpatialIndex> Simulation<T> {
             }
         }
 
-
         let mut to_be_removed: Vec<AgentId> = vec![];
 
         // Calculate motion updates
@@ -285,11 +284,10 @@ impl<T: SpatialIndex> Simulation<T> {
                         .map(|neighbor_id| self.agents.get(neighbor_id).unwrap().clone()),
                 );
 
-                vel = local_planner.lock().unwrap().get_desired_velocity(
-                    &agent,
-                    &neighbours,
-                    vel
-                );
+                vel = local_planner
+                    .lock()
+                    .unwrap()
+                    .get_desired_velocity(&agent, &neighbours, vel);
             }
 
             // Agent position
@@ -303,40 +301,35 @@ impl<T: SpatialIndex> Simulation<T> {
             }
 
             // Check if agent belongs to a SourceSink.
-            let source_sink_id =
-                self.source_sink_agent_correspondence.get(agent_id);
+            let source_sink_id = self.source_sink_agent_correspondence.get(agent_id);
             let mut next_waypoint = agent.next_waypoint;
 
             if let Some(source_sink_id) = source_sink_id {
                 let source_sink = &self.source_sinks.registry[source_sink_id];
-                if agent.next_waypoint >= source_sink.waypoints.len()
-                {
+                if agent.next_waypoint >= source_sink.waypoints.len() {
                     println!("Rogue agent found.Agent will be terminated. You should not be seeing this printed");
                     to_be_removed.push(*agent_id);
                 }
-                if (agent.position - source_sink.waypoints[agent.next_waypoint]).norm() < source_sink.radius_sink
+                if (agent.position - source_sink.waypoints[agent.next_waypoint]).norm()
+                    < source_sink.radius_sink
                 {
                     println!("Reached waypoint");
-                    if agent.next_waypoint == source_sink.waypoints.len() - 1
-                    {
+                    if agent.next_waypoint == source_sink.waypoints.len() - 1 {
                         if source_sink.loop_forever {
                             next_waypoint = 0usize;
-                        }
-                        else {
+                        } else {
                             to_be_removed.push(*agent_id);
                         }
-                    }
-                    else
-                    {
+                    } else {
                         next_waypoint += 1usize;
-                        self.high_level_planner[&agent_id].lock().unwrap().set_target(
-                            &self.agents[&agent_id],
-                            source_sink.waypoints[next_waypoint],
-                            Vec2f::new(
-                                source_sink.radius_sink,
-                                source_sink.radius_sink,
-                            ),
-                        );
+                        self.high_level_planner[&agent_id]
+                            .lock()
+                            .unwrap()
+                            .set_target(
+                                &self.agents[&agent_id],
+                                source_sink.waypoints[next_waypoint],
+                                Vec2f::new(source_sink.radius_sink, source_sink.radius_sink),
+                            );
                     }
                 }
             }
@@ -347,7 +340,7 @@ impl<T: SpatialIndex> Simulation<T> {
                     new_pos: new_pos,
                     new_vel: vel,
                     updated: true,
-                    next_waypoint
+                    next_waypoint,
                 },
             );
         }
