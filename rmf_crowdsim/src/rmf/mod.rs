@@ -74,6 +74,7 @@ impl SpatialHash
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// High level planner for an RMF-world.
 pub struct RMFPlanner
 {
     /// The visibility graph
@@ -92,11 +93,10 @@ pub struct RMFPlanner
 
 impl RMFPlanner
 {
+    /// Create a new planner using 
     pub fn new(
         vertices: Vec<(f64, f64)>, walls: Vec<(usize, usize)>, scale: f64, radius: f64) -> Self
     {
-        println!("Building graph");
-
         let mut grid = SparseGrid::new(scale);
 
         for (v1, v2) in walls {

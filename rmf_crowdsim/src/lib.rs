@@ -27,6 +27,9 @@ pub trait EventListener {
 
     /// Called each time an agent is destroyed
     fn agent_destroyed(&mut self, agent: AgentId);
+
+    /// Waypoint reached
+    fn waypoint_reached(&mut self, position: Vec2f, agent: AgentId) {}
 }
 
 /// Agent  ID
@@ -54,6 +57,8 @@ pub struct Agent {
     preferred_vel: Vec2f,
     /// Angular velocity of agent
     pub angular_vel: f64,
+    /// Next waypoint
+    pub next_waypoint: usize,
     /// Eyesight range: How far each individual agent can "see"
     /// TODO(arjo): Replace with "Agent Property" hashmap.
     pub eyesight_range: f64,
@@ -89,6 +94,7 @@ struct StateUpdateBuffer {
     new_vel: Vec2f,
     new_pos: Vec2f,
     updated: bool,
+    next_waypoint: usize
 }
 
 impl<T: SpatialIndex> Simulation<T> {
@@ -132,6 +138,7 @@ impl<T: SpatialIndex> Simulation<T> {
                     velocity: Vector2::<f64>::new(0f64, 0f64),
                     preferred_vel: Vector2::<f64>::new(0f64, 0f64),
                     angular_vel: 0f64,
+                    next_waypoint: 0usize,
                     eyesight_range: agent_eyesight_range,
                 },
             );
@@ -183,9 +190,10 @@ impl<T: SpatialIndex> Simulation<T> {
         }
     }
 
+    /// This is the main simulation loop. Call to run crowdsim for one iteration.
     pub fn step(&mut self, dur: std::time::Duration) -> Result<(), String> {
         // Spawn agents using source sinks.
-        // TODO(arjo): lots of unessecary allocations going on here to keep
+        // TODO(arjo): lots of unnecessary allocations going on here to keep
         // the borrow checker happy
         let to_add: Vec<(usize, Arc<SourceSink>, Vec<Vec2f>)> = self
             .source_sinks
@@ -197,8 +205,11 @@ impl<T: SpatialIndex> Simulation<T> {
                 let mut agent_spawn_points = vec![];
                 //for i in 0..spawn_number {
                 if spawn_number > 0 {
-                    /// TODO: Remove hard coded constant
-                    let neighbours = self.spatial_index.get_neighbours_in_radius(0.4, source_sink.source);
+                    /// TODO: Remove hard coded constant. Ideally we should have
+                    /// a queue that gets popped if more than one agent is
+                    /// spawned
+                    let neighbours = self.spatial_index.get_neighbours_in_radius(
+                        0.4, source_sink.source);
                     if neighbours.len() == 0
                     {
                         agent_spawn_points.push(source_sink.source);
@@ -226,9 +237,10 @@ impl<T: SpatialIndex> Simulation<T> {
                 for agent in agents {
                     self.source_sink_agent_correspondence
                         .insert(agent, source_id);
+
                     self.high_level_planner[&agent].lock().unwrap().set_target(
                         &self.agents[&agent],
-                        self.source_sinks.registry[&source_id].sink,
+                        self.source_sinks.registry[&source_id].waypoints[0],
                         Vec2f::new(
                             self.source_sinks.registry[&source_id].radius_sink,
                             self.source_sinks.registry[&source_id].radius_sink,
@@ -239,6 +251,9 @@ impl<T: SpatialIndex> Simulation<T> {
                 return Err("Failed to add agents from source".to_string());
             }
         }
+
+
+        let mut to_be_removed: Vec<AgentId> = vec![];
 
         // Calculate motion updates
         for agent_id in self.agents.keys() {
@@ -282,19 +297,59 @@ impl<T: SpatialIndex> Simulation<T> {
             let pos = agent.position;
             let new_pos = pos + dx;
 
+            let success = self.spatial_index.add_or_update(*agent_id, new_pos);
+            if let Err(error_message) = success {
+                return Err(error_message);
+            }
+
+            // Check if agent belongs to a SourceSink.
+            let source_sink_id =
+                self.source_sink_agent_correspondence.get(agent_id);
+            let mut next_waypoint = agent.next_waypoint;
+
+            if let Some(source_sink_id) = source_sink_id {
+                let source_sink = &self.source_sinks.registry[source_sink_id];
+                if agent.next_waypoint >= source_sink.waypoints.len()
+                {
+                    println!("Rogue agent found.Agent will be terminated. You should not be seeing this printed");
+                    to_be_removed.push(*agent_id);
+                }
+                if (agent.position - source_sink.waypoints[agent.next_waypoint]).norm() < source_sink.radius_sink
+                {
+                    println!("Reached waypoint");
+                    if agent.next_waypoint == source_sink.waypoints.len() - 1
+                    {
+                        if source_sink.loop_forever {
+                            next_waypoint = 0usize;
+                        }
+                        else {
+                            to_be_removed.push(*agent_id);
+                        }
+                    }
+                    else
+                    {
+                        next_waypoint += 1usize;
+                        self.high_level_planner[&agent_id].lock().unwrap().set_target(
+                            &self.agents[&agent_id],
+                            source_sink.waypoints[next_waypoint],
+                            Vec2f::new(
+                                source_sink.radius_sink,
+                                source_sink.radius_sink,
+                            ),
+                        );
+                    }
+                }
+            }
+
             self.update_buffer.insert(
                 *agent_id,
                 StateUpdateBuffer {
                     new_pos: new_pos,
                     new_vel: vel,
                     updated: true,
+                    next_waypoint
                 },
             );
-
-            let success = self.spatial_index.add_or_update(*agent_id, new_pos);
-            if let Err(error_message) = success {
-                return Err(error_message);
-            }
         }
 
         // Commit updates
@@ -305,12 +360,18 @@ impl<T: SpatialIndex> Simulation<T> {
             let mut agent = self.agents.get_mut(id).unwrap();
             agent.velocity = state_update.new_vel;
             agent.position = state_update.new_pos;
+            agent.next_waypoint = state_update.next_waypoint;
             state_update.updated = false;
         }
 
-        // Remove agents
-        let mut to_be_removed: Vec<AgentId> = vec![];
+        // Remove agents (old)
+        // This arguably has less overhead than the current
+        // version however since we are iterating through all agents it makes
+        // little sense to have this micro-optimization.
+        /*
         for (sink_id, source_sink) in self.source_sinks.registry.iter() {
+            let waypoint_len = source_sink.waypoints.len();
+            for i in 0..waypoint_len
             let candidates_to_be_removed = self
                 .spatial_index
                 .get_neighbours_in_radius(source_sink.radius_sink, source_sink.sink);
@@ -318,7 +379,7 @@ impl<T: SpatialIndex> Simulation<T> {
                 let res = self.source_sink_agent_correspondence.get(candidate);
                 matches!(res, Some(x) if *x == *sink_id)
             }));
-        }
+        }*/
 
         for i in to_be_removed {
             self.remove_agents(i);

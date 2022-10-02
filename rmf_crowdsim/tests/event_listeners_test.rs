@@ -80,12 +80,13 @@ fn test_event_listener_source_sink_api() {
 
     let source_sink = Arc::new(SourceSink {
         source: Vec2f::new(0f64, 0f64),
-        sink: Vec2f::new(20f64, 0f64),
+        waypoints: vec!(Vec2f::new(20f64, 0f64)),
         radius_sink: 1f64,
         crowd_generator: crowd_generator,
         high_level_planner: high_level_planner,
         local_planner: local_planner,
         agent_eyesight_range: 5f64,
+        loop_forever: false
     });
 
     let event_listener = Arc::new(Mutex::new(MockEventListener::new()));
@@ -98,12 +99,12 @@ fn test_event_listener_source_sink_api() {
         assert_eq!(event_listener.lock().unwrap().added.len(), steps);
         crowd_simulation.step(step_size);
     }
-    for steps in 20usize..25usize {
-        assert_eq!(crowd_simulation.agents.len(), 19usize);
+    for steps in 20usize..40usize {
+        assert_eq!(crowd_simulation.agents.len(), 20usize);
         assert_eq!(event_listener.lock().unwrap().added.len(), steps);
         assert_eq!(
             event_listener.lock().unwrap().removed.len(),
-            steps - 19usize
+            steps - 20usize
         );
         crowd_simulation.step(step_size);
     }
