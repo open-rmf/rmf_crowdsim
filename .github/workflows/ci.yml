@@ -1,10 +1,10 @@
 on: [push, pull_request]
 
-name: Lints
+name: Unit tests and style
 
 jobs:
-  clippy:
-    name: Clippy
+  ci:
+    name: Cargo Test and Cargo Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
