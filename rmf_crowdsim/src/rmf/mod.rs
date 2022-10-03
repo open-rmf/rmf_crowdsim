@@ -132,6 +132,8 @@ impl RMFPlanner {
         }
     }
 
+    /// Read yaml format.
+    /// TODO(arjo): make optional
     pub fn from_yaml(yaml_str: &str, inflation: f64, scale: f64, agent_radius: f64) -> Self {
         let mut vertices = vec![];
 

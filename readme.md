@@ -30,5 +30,10 @@ This can be used for integrating crowdsim with other applications like Gazebo.
 ## Examples
 The following are some example applications that utilize crowdsim for crowd simulation.
 
+### Gazebo Integration
+![](doc/GazeboIntegration.gif)
+Here we provide C-bindings to rmf-crowdsim along with tight gazebo integration.
+![](doc/threes-a-crowd.gif)
+Here we show local avoidance. See `rmf_crowdsim_viz`.
 ## Caveats
 To integrate with bevy you will need to use `ExclusiveSystems` as unfortunately Im using mutex where I probably should not be.
