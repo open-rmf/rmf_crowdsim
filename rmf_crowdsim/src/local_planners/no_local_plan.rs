@@ -1,17 +1,18 @@
 use crate::local_planners::local_planner::LocalPlanner;
-use crate::map_representation::map::Map;
-use crate::spatial_index::spatial_index::SpatialIndex;
-use crate::Vec2f;
 use crate::Agent;
+use crate::Vec2f;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-pub struct NoLocalPlan{}
+pub struct NoLocalPlan {}
 
-impl<M: Map, T: SpatialIndex> LocalPlanner<M, T> for NoLocalPlan {
-    fn get_desired_velocity(&self,
-        _agent: &Agent, recommended_velocity: Vec2f, _spatial_index: &T, _map: Arc<M>) -> Vec2f
-    {
+impl LocalPlanner for NoLocalPlan {
+    fn get_desired_velocity(
+        &self,
+        _agent: &Agent,
+        _nearby_agents: &Vec<Agent>,
+        recommended_velocity: Vec2f,
+    ) -> Vec2f {
         recommended_velocity
     }
 }
