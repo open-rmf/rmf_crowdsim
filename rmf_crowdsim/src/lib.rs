@@ -65,6 +65,7 @@ pub struct Agent {
 }
 
 /// A representation of a simulation session
+/// TODO(arjo): Expose proximity queries for things like doors etc.
 pub struct Simulation<T: SpatialIndex> {
     /// List of all active agents. This holds the simulation state.
     pub agents: HashMap<AgentId, Agent>,
