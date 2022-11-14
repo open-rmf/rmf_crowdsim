@@ -1,5 +1,5 @@
 use rmf_crowdsim::local_planners::no_local_plan::NoLocalPlan;
-use rmf_crowdsim::source_sink::source_sink::{MonotonicCrowd, SourceSink};
+use rmf_crowdsim::source_sink::source_sink::{MonotonicCrowd, SourceSink, Waypoint};
 use rmf_crowdsim::*;
 use std::sync::{Arc, Mutex};
 
@@ -79,14 +79,17 @@ fn test_event_listener_source_sink_api() {
     let crowd_generator = Arc::new(MonotonicCrowd::new(1f64));
 
     let source_sink = Arc::new(SourceSink {
-        source: Vec2f::new(0f64, 0f64),
-        waypoints: vec![Vec2f::new(20f64, 0f64)],
+        source: Waypoint::new_from_position(Vec2f::new(0f64, 0f64)),
+        waypoints: vec![Waypoint::new_from_position(Vec2f::new(20f64, 0f64))],
         radius_sink: 1f64,
         crowd_generator: crowd_generator,
         high_level_planner: high_level_planner,
         local_planner: local_planner,
         agent_eyesight_range: 5f64,
         loop_forever: false,
+        spawn_at: None,
+        stop_spawning: None,
+        max_agents: None
     });
 
     let event_listener = Arc::new(Mutex::new(MockEventListener::new()));
@@ -106,6 +109,55 @@ fn test_event_listener_source_sink_api() {
             event_listener.lock().unwrap().removed.len(),
             steps - 20usize
         );
+        crowd_simulation.step(step_size);
+    }
+}
+
+
+#[test]
+fn test_max_crowd() {
+    let velocity = Vec2f::new(1.0f64, 0.0f64);
+    let step_size = std::time::Duration::new(1, 0);
+    let stub_spatial = spatial_index::location_hash_2d::LocationHash2D::new(
+        1000f64,
+        1000f64,
+        20f64,
+        Point::new(-500f64, -500f64),
+    );
+    let high_level_planner = Arc::new(Mutex::new(StubHighLevelPlan::new(velocity)));
+    let local_planner = Arc::new(Mutex::new(NoLocalPlan {}));
+
+    let mut crowd_simulation = Simulation::new(stub_spatial);
+
+    let crowd_generator = Arc::new(MonotonicCrowd::new(1f64));
+
+    let source_sink = Arc::new(SourceSink {
+        source: Waypoint::new_from_position(Vec2f::new(0f64, 0f64)),
+        waypoints: vec![Waypoint::new_from_position(Vec2f::new(20f64, 0f64))],
+        radius_sink: 1f64,
+        crowd_generator: crowd_generator,
+        high_level_planner: high_level_planner,
+        local_planner: local_planner,
+        agent_eyesight_range: 5f64,
+        loop_forever: false,
+        spawn_at: None,
+        stop_spawning: None,
+        max_agents: Some(3)
+    });
+
+    let event_listener = Arc::new(Mutex::new(MockEventListener::new()));
+
+    crowd_simulation.add_event_listener(event_listener.clone());
+    crowd_simulation.add_source_sink(source_sink);
+
+    for steps in 0usize..3usize {
+        assert_eq!(crowd_simulation.agents.len(), steps);
+        assert_eq!(event_listener.lock().unwrap().added.len(), steps);
+        crowd_simulation.step(step_size);
+    }
+    for steps in 3usize..10usize {
+        assert!(crowd_simulation.agents.len() <= 3usize);
+        assert!(event_listener.lock().unwrap().added.len() <= 3usize);
         crowd_simulation.step(step_size);
     }
 }

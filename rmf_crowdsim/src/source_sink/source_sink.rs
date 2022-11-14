@@ -32,10 +32,45 @@ pub trait CrowdGenerator {
     fn get_number_to_spawn(&self, time_elapsed: Duration) -> usize;
 }
 
+/// Wait for next input
+#[derive(Clone, Debug)]
+pub enum WaitingModes{
+    WaitForTime(Duration),
+    WaitForSignal(String),
+    Continue
+}
+
+/// Waypoints
+pub struct Waypoint
+{
+    /// Position of waypoint
+    pub position: Vec2f,
+
+    /// Consider reached when within radius
+    pub radius: Option<f64>,
+
+    /// Signal to emit when agent reaches
+    pub signalWhenReached: Option<String>,
+
+    /// When to move to next waypoint
+    pub proceedToNextWaypoint: WaitingModes
+}
+
+impl Waypoint {
+    pub fn new_from_position(position: Vec2f) -> Self {
+        Self {
+            position,
+            radius: None,
+            signalWhenReached: None,
+            proceedToNextWaypoint: WaitingModes::Continue
+        }
+    }
+}
+
 /// Serves as a source and a sink component.
 pub struct SourceSink {
     /// The source location
-    pub source: Vec2f,
+    pub source: Waypoint,
 
     /// The radius of the sink location
     pub radius_sink: f64,
@@ -50,13 +85,23 @@ pub struct SourceSink {
     pub local_planner: Arc<Mutex<dyn LocalPlanner>>,
 
     /// Waypoints. The last waypoint acts as a sink.
-    pub waypoints: Vec<Vec2f>,
+    pub waypoints: Vec<Waypoint>,
 
-    /// Loop through waypoints if have value.
+    /// Loop through waypoints
     pub loop_forever: bool,
 
     /// Eyesight (TODO(arjo): Replace with AgentProperties)
     pub agent_eyesight_range: f64,
+
+    /// Start spawning at specific time. None means spawn since dawn of time
+    pub spawn_at: Option<Duration>,
+
+    /// Stop spawning at time. None means never stop spawning.
+    pub stop_spawning: Option<Duration>,
+
+    /// Stop spawning once max number of agents reached. This refers to the total
+    /// number of agents spawned
+    pub max_agents: Option<u64>
 }
 
 /// A crowd generator that uses the poisson function.

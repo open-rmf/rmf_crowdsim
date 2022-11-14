@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-
+/// Utility class implementing a simple one-off registry
 pub struct Registry<T> {
     pub registry: HashMap<usize, T>,
     counter: usize,

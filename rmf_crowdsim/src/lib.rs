@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 pub extern crate nalgebra as na;
 use na::Vector2;
@@ -71,6 +72,8 @@ pub struct Simulation<T: SpatialIndex> {
     pub agents: HashMap<AgentId, Agent>,
     /// List of all sources and sink.
     source_sinks: Registry<Arc<SourceSink>>,
+    /// Number of agents spawned by each source and sink
+    num_agents_spawned: HashMap<usize, usize>,
     /// Spatial Index. Used internally to
     spatial_index: T,
     /// High level planning
@@ -104,6 +107,7 @@ impl<T: SpatialIndex> Simulation<T> {
         Self {
             agents: HashMap::new(),
             source_sinks: Registry::new(),
+            num_agents_spawned: HashMap::new(),
             spatial_index: spatial_index,
             high_level_planner: HashMap::new(),
             local_planner: HashMap::new(),
@@ -201,22 +205,41 @@ impl<T: SpatialIndex> Simulation<T> {
             .registry
             .iter()
             .map(|(source_sink_id, source_sink)| {
+                let pos = source_sink.source.position.clone();
+                let max_agents = if let Some(agents) = source_sink.max_agents {
+                    agents
+                }
+                else
+                {
+                    std::u64::MAX
+                };
                 let spawn_number = source_sink.crowd_generator.get_number_to_spawn(dur);
+                let num_agents = if let Some(value) = self.num_agents_spawned.get(source_sink_id) {
+                    value
+                }
+                else
+                {
+                    self.num_agents_spawned.insert(*source_sink_id, 0);
+                    &self.num_agents_spawned[source_sink_id]
+                };
                 // TODO(arjo): deconflict spawn points.
                 let mut agent_spawn_points = vec![];
-                //for i in 0..spawn_number {
-                if spawn_number > 0 {
-                    /// TODO: Remove hard coded constant. Ideally we should have
-                    /// a queue that gets popped if more than one agent is
-                    /// spawned
+
+                if spawn_number > 0 && *num_agents < max_agents as usize{
+                    // TODO: Remove hard coded constant. Ideally we should have
+                    // a queue that gets popped if more than one agent is
+                    // spawned
                     let neighbours = self
                         .spatial_index
-                        .get_neighbours_in_radius(0.4, source_sink.source);
+                        .get_neighbours_in_radius(0.4, pos);
                     if neighbours.len() == 0 {
-                        agent_spawn_points.push(source_sink.source);
+                        agent_spawn_points.push(pos);
+                        if let Some(num_agents) = self.num_agents_spawned.get_mut(&source_sink_id) {
+                            *num_agents += 1;
+                        }
                     }
                 }
-                //}
+
                 (*source_sink_id, source_sink.clone(), agent_spawn_points)
             })
             .collect();
@@ -241,7 +264,7 @@ impl<T: SpatialIndex> Simulation<T> {
 
                     self.high_level_planner[&agent].lock().unwrap().set_target(
                         &self.agents[&agent],
-                        self.source_sinks.registry[&source_id].waypoints[0],
+                        self.source_sinks.registry[&source_id].waypoints[0].position,
                         Vec2f::new(
                             self.source_sinks.registry[&source_id].radius_sink,
                             self.source_sinks.registry[&source_id].radius_sink,
@@ -311,7 +334,7 @@ impl<T: SpatialIndex> Simulation<T> {
                     println!("Rogue agent found.Agent will be terminated. You should not be seeing this printed");
                     to_be_removed.push(*agent_id);
                 }
-                if (agent.position - source_sink.waypoints[agent.next_waypoint]).norm()
+                if (agent.position - source_sink.waypoints[agent.next_waypoint].position).norm()
                     < source_sink.radius_sink
                 {
                     println!("Reached waypoint");
@@ -328,7 +351,7 @@ impl<T: SpatialIndex> Simulation<T> {
                             .unwrap()
                             .set_target(
                                 &self.agents[&agent_id],
-                                source_sink.waypoints[next_waypoint],
+                                source_sink.waypoints[next_waypoint].position,
                                 Vec2f::new(source_sink.radius_sink, source_sink.radius_sink),
                             );
                     }
