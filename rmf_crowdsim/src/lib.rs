@@ -208,30 +208,24 @@ impl<T: SpatialIndex> Simulation<T> {
                 let pos = source_sink.source.position.clone();
                 let max_agents = if let Some(agents) = source_sink.max_agents {
                     agents
-                }
-                else
-                {
+                } else {
                     std::u64::MAX
                 };
                 let spawn_number = source_sink.crowd_generator.get_number_to_spawn(dur);
                 let num_agents = if let Some(value) = self.num_agents_spawned.get(source_sink_id) {
                     value
-                }
-                else
-                {
+                } else {
                     self.num_agents_spawned.insert(*source_sink_id, 0);
                     &self.num_agents_spawned[source_sink_id]
                 };
                 // TODO(arjo): deconflict spawn points.
                 let mut agent_spawn_points = vec![];
 
-                if spawn_number > 0 && *num_agents < max_agents as usize{
+                if spawn_number > 0 && *num_agents < max_agents as usize {
                     // TODO: Remove hard coded constant. Ideally we should have
                     // a queue that gets popped if more than one agent is
                     // spawned
-                    let neighbours = self
-                        .spatial_index
-                        .get_neighbours_in_radius(0.4, pos);
+                    let neighbours = self.spatial_index.get_neighbours_in_radius(0.4, pos);
                     if neighbours.len() == 0 {
                         agent_spawn_points.push(pos);
                         if let Some(num_agents) = self.num_agents_spawned.get_mut(&source_sink_id) {

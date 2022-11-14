@@ -34,15 +34,14 @@ pub trait CrowdGenerator {
 
 /// Wait for next input
 #[derive(Clone, Debug)]
-pub enum WaitingModes{
+pub enum WaitingModes {
     WaitForTime(Duration),
     WaitForSignal(String),
-    Continue
+    Continue,
 }
 
 /// Waypoints
-pub struct Waypoint
-{
+pub struct Waypoint {
     /// Position of waypoint
     pub position: Vec2f,
 
@@ -53,7 +52,7 @@ pub struct Waypoint
     pub signalWhenReached: Option<String>,
 
     /// When to move to next waypoint
-    pub proceedToNextWaypoint: WaitingModes
+    pub proceedToNextWaypoint: WaitingModes,
 }
 
 impl Waypoint {
@@ -62,7 +61,7 @@ impl Waypoint {
             position,
             radius: None,
             signalWhenReached: None,
-            proceedToNextWaypoint: WaitingModes::Continue
+            proceedToNextWaypoint: WaitingModes::Continue,
         }
     }
 }
@@ -101,7 +100,7 @@ pub struct SourceSink {
 
     /// Stop spawning once max number of agents reached. This refers to the total
     /// number of agents spawned
-    pub max_agents: Option<u64>
+    pub max_agents: Option<u64>,
 }
 
 /// A crowd generator that uses the poisson function.

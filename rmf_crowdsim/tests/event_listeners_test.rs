@@ -89,7 +89,7 @@ fn test_event_listener_source_sink_api() {
         loop_forever: false,
         spawn_at: None,
         stop_spawning: None,
-        max_agents: None
+        max_agents: None,
     });
 
     let event_listener = Arc::new(Mutex::new(MockEventListener::new()));
@@ -112,7 +112,6 @@ fn test_event_listener_source_sink_api() {
         crowd_simulation.step(step_size);
     }
 }
-
 
 #[test]
 fn test_max_crowd() {
@@ -142,7 +141,7 @@ fn test_max_crowd() {
         loop_forever: false,
         spawn_at: None,
         stop_spawning: None,
-        max_agents: Some(3)
+        max_agents: Some(3),
     });
 
     let event_listener = Arc::new(Mutex::new(MockEventListener::new()));
