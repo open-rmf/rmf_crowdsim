@@ -1283,10 +1283,10 @@ dependencies = [
 [[package]]
 name = "mapf"
 version = "0.1.0"
-source = "git+https://github.com/open-rmf/mapf.git?branch=arjo/maybe_fix/visibility_timepoint#f24133320590045166bff01cfd4f5d3f7c0e9f9e"
+source = "git+https://github.com/open-rmf/mapf.git#9c1fb85f14f719167c14d2c14af345d278cb8b10"
 dependencies = [
  "anyhow",
- "approx 0.5.1",
+ "approx 0.3.2",
  "arrayvec 0.7.2",
  "bitfield",
  "cached",
@@ -1294,7 +1294,7 @@ dependencies = [
  "nalgebra 0.31.1",
  "num",
  "num-complex",
- "simba 0.7.2",
+ "simba 0.5.1",
  "sorted-vec",
  "thiserror",
  "time-point",
