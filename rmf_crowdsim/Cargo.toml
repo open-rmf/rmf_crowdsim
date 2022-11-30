@@ -15,3 +15,4 @@ image = "0.24.3"
 imageproc = "0.23.0"
 yaml-rust = "0.4"
 line_drawing = "1.0.0"
+rmf_site_format = { git = "https://github.com/open-rmf/rmf_site", branch = "export_occupancy" }

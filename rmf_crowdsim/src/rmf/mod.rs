@@ -29,6 +29,8 @@ use mapf::{
     planner::make_planner,
 };
 
+use rmf_site_format::Occupancy;
+
 use crate::Agent;
 use crate::AgentId;
 use crate::Vec2f;
@@ -129,6 +131,27 @@ impl RMFPlanner {
             route_plans_by_location: HashMap::default(),
             scale,
             radius,
+        }
+    }
+
+    pub fn from_occupancy(occupancy: &Occupancy, agent_radius: f64) -> Self {
+        let mut occupied: HashMap<Cell, bool> = HashMap::new();
+        for (x, column) in &occupancy.cells {
+            for y in column {
+                occupied.insert(Cell::new(*x, *y), true);
+            }
+        }
+
+        let mut sparse_grid = SparseGrid::new(occupancy.cell_size as f64);
+        sparse_grid.change_cells(&occupied);
+
+        Self {
+            visibility_graph: Arc::new(Visibility::new(sparse_grid, agent_radius)),
+            agent_cache: HashMap::default(),
+            route_list: Vec::new(),
+            route_plans_by_location: HashMap::default(),
+            scale: occupancy.cell_size as f64,
+            radius: agent_radius,
         }
     }
 
