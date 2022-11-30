@@ -22,7 +22,7 @@ use std::time::Duration;
 use crate::highlevel_planners::highlevel_planners::HighLevelPlanner;
 use crate::local_planners::local_planner::LocalPlanner;
 
-use rand::distributions::Distribution;
+use rand::distributions::{Distribution, Uniform};
 
 use statrs::distribution::Poisson;
 
@@ -36,6 +36,10 @@ pub trait CrowdGenerator {
 pub struct SourceSink {
     /// The source location
     pub source: Vec2f,
+
+    /// The size of the box in which spawning may happen.
+    /// Uniform distribution will be used.
+    pub source_range: Vec2f,
 
     /// The radius of the sink location
     pub radius_sink: f64,
@@ -59,6 +63,30 @@ pub struct SourceSink {
     pub agent_eyesight_range: f64,
 }
 
+impl SourceSink {
+    pub fn spawn(&self) -> Vec2f {
+        if self.source_range[0] <= 0.0 && self.source_range[1] <= 0.0 {
+            return self.source;
+        }
+
+        let mut rng = rand::thread_rng();
+        let dx = if self.source_range[0] <= 0.0 {
+            0.0
+        } else {
+            let range_x = self.source_range[0]/2.0;
+            Uniform::from(-range_x..range_x).sample(&mut rng)
+        };
+        let dy = if self.source_range[1] <= 0.0 {
+            0.0
+        } else {
+            let range_y = self.source_range[1]/2.0;
+            Uniform::from(-range_y..range_y).sample(&mut rng)
+        };
+
+        self.source + Vec2f::new(dx, dy)
+    }
+}
+
 /// A crowd generator that uses the poisson function.
 pub struct PoissonCrowd {
     pub rate: f64,
@@ -67,7 +95,7 @@ pub struct PoissonCrowd {
 /// Create a crowd.
 impl PoissonCrowd {
     pub fn new(rate: f64) -> Self {
-        PoissonCrowd { rate: rate }
+        PoissonCrowd { rate }
     }
 }
 
@@ -89,7 +117,7 @@ pub struct MonotonicCrowd {
 impl MonotonicCrowd {
     /// rate: rate at which to spawn.
     pub fn new(rate: f64) -> Self {
-        MonotonicCrowd { rate: rate }
+        MonotonicCrowd { rate }
     }
 }
 

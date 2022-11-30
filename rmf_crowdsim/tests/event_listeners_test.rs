@@ -80,6 +80,7 @@ fn test_event_listener_source_sink_api() {
 
     let source_sink = Arc::new(SourceSink {
         source: Vec2f::new(0f64, 0f64),
+        source_range: Vec2f::new(0.0, 0.0),
         waypoints: vec![Vec2f::new(20f64, 0f64)],
         radius_sink: 1f64,
         crowd_generator: crowd_generator,

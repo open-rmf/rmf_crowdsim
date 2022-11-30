@@ -359,11 +359,12 @@ impl<T: SpatialIndex> Simulation<T> {
                     // TODO: Remove hard coded constant. Ideally we should have
                     // a queue that gets popped if more than one agent is
                     // spawned
+                    let p = source_sink.spawn();
                     let neighbours = self
                         .spatial_index
-                        .get_neighbours_in_radius(0.4, source_sink.source);
+                        .get_neighbours_in_radius(0.4, p);
                     if neighbours.len() == 0 {
-                        agent_spawn_points.push(source_sink.source);
+                        agent_spawn_points.push(p);
                     }
                 }
                 //}
