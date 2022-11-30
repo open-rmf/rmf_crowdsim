@@ -4,7 +4,7 @@ use crate::Vec2f;
 
 use std::sync::{Arc, Mutex};
 
-pub struct NoLocalPlan {}
+pub struct NoLocalPlan;
 
 impl LocalPlanner for NoLocalPlan {
     fn get_desired_velocity(

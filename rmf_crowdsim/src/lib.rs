@@ -11,8 +11,14 @@ pub mod spatial_index;
 
 mod util;
 
-pub use crate::highlevel_planners::highlevel_planners::HighLevelPlanner;
-pub use crate::local_planners::local_planner::LocalPlanner;
+pub use crate::highlevel_planners::{
+    highlevel_planners::HighLevelPlanner,
+    no_highlevel_plan::NoHighLevelPlan,
+};
+pub use crate::local_planners::{
+    local_planner::LocalPlanner,
+    no_local_plan::NoLocalPlan,
+};
 use crate::source_sink::source_sink::SourceSink;
 pub use crate::spatial_index::spatial_index::SpatialIndex;
 use crate::util::registry::Registry;
@@ -30,6 +36,9 @@ pub trait EventListener {
 
     /// Waypoint reached
     fn waypoint_reached(&mut self, position: Vec2f, agent: AgentId) {}
+
+    /// Goal reached
+    fn goal_reached(&mut self, goal_id: usize, agent: AgentId) {}
 }
 
 /// Agent  ID
@@ -57,8 +66,15 @@ pub struct Agent {
     preferred_vel: Vec2f,
     /// Angular velocity of agent
     pub angular_vel: f64,
-    /// Next waypoint
-    pub next_waypoint: usize,
+    /// The waypoint that the robot is moving towards.
+    ///
+    /// For source-sink this corresponds to an index in the waypoints vector.
+    ///
+    /// For persistent agents this corresponds to the goal_id that the agent is
+    /// moving towards. The first time that an agent arrives within the threshold
+    /// of the goal, this becomes goal_id+1 but the agent will continue to use
+    /// that goal_id as its goal until a goal_id+1 is assigned.
+    pub target_waypoint: usize,
     /// Eyesight range: How far each individual agent can "see"
     /// TODO(arjo): Replace with "Agent Property" hashmap.
     pub eyesight_range: f64,
@@ -80,15 +96,44 @@ pub struct Simulation<T: SpatialIndex> {
     /// Simulation time
     sim_time: std::time::Duration,
     /// Get last allocated agent id
-    last_alloc_agent_id: usize,
+    next_alloc_agent_id: usize,
     /// Update buffer: Ideally we would not need this if
     /// I had done a better job of the update loop
     update_buffer: HashMap<AgentId, StateUpdateBuffer>,
     /// Event listeners
     event_listeners: Registry<Arc<Mutex<dyn EventListener>>>,
     /// Contains the correspondence between agents and their source/sinks
-    source_sink_agent_correspondence: HashMap<AgentId, usize>,
+    controller_agent_correspondence: HashMap<AgentId, Controller>,
+    /// Reusable no-planner for obstacles
+    no_highlevel_planner: Arc<Mutex<dyn HighLevelPlanner>>,
+    /// Reusable no-planner for obstacles
+    no_local_planner: Arc<Mutex<dyn LocalPlanner>>,
 }
+
+#[derive(Debug)]
+pub enum Controller {
+    SourceSink(usize),
+    Persistent(Persistent),
+    Obstacle(Obstacle),
+}
+
+#[derive(Debug)]
+pub struct Persistent {
+    /// How close the agent needs to get to its goal
+    pub goal_radius: f64,
+
+    /// The current goal of the agent
+    pub goal: Vec2f,
+
+    /// The ID of the current goal. This will increase by 1 each time the goal changes.
+    pub goal_id: usize,
+}
+
+#[derive(Debug)]
+pub struct Obstacle {
+    pub position: Vec2f,
+}
+
 
 /// Internal state update buffer structure
 struct StateUpdateBuffer {
@@ -108,11 +153,48 @@ impl<T: SpatialIndex> Simulation<T> {
             high_level_planner: HashMap::new(),
             local_planner: HashMap::new(),
             sim_time: std::time::Duration::new(0, 0),
-            last_alloc_agent_id: 0,
+            next_alloc_agent_id: 0,
             update_buffer: HashMap::new(),
             event_listeners: Registry::new(),
-            source_sink_agent_correspondence: HashMap::new(),
+            controller_agent_correspondence: HashMap::new(),
+            no_highlevel_planner: Arc::new(Mutex::new(NoHighLevelPlan)),
+            no_local_planner: Arc::new(Mutex::new(NoLocalPlan)),
         }
+    }
+
+    pub fn add_agent(
+        &mut self,
+        spawn_position: Point,
+        high_level_planner: Arc<Mutex<dyn HighLevelPlanner>>,
+        local_planner: Arc<Mutex<dyn LocalPlanner>>,
+        agent_eyesight_range: f64,
+    ) -> Result<AgentId, String> {
+        let agent_id = self.next_alloc_agent_id;
+        self.next_alloc_agent_id += 1;
+        self.high_level_planner
+            .insert(agent_id, high_level_planner.clone());
+        self.local_planner.insert(agent_id, local_planner.clone());
+        self.agents.insert(
+            agent_id,
+            Agent {
+                agent_id: agent_id,
+                position: spawn_position,
+                orientation: 0f64,
+                velocity: Vector2::<f64>::new(0f64, 0f64),
+                preferred_vel: Vector2::<f64>::new(0f64, 0f64),
+                angular_vel: 0f64,
+                target_waypoint: 0usize,
+                eyesight_range: agent_eyesight_range,
+            },
+        );
+        let success = self.spatial_index.add_or_update(agent_id, spawn_position);
+        if let Err(error_message) = success {
+            return Err(error_message);
+        }
+        for listener in self.event_listeners.registry.values() {
+            listener.lock().unwrap().agent_spawned(spawn_position, agent_id);
+        }
+        Ok(agent_id)
     }
 
     /// Adds a group of agents
@@ -123,36 +205,14 @@ impl<T: SpatialIndex> Simulation<T> {
         local_planner: Arc<Mutex<dyn LocalPlanner>>,
         agent_eyesight_range: f64,
     ) -> Result<Vec<AgentId>, String> {
-        let mut res = Vec::<AgentId>::new();
-        for x in spawn_positions {
-            let agent_id = self.last_alloc_agent_id;
-            self.last_alloc_agent_id += 1;
-            self.high_level_planner
-                .insert(agent_id, high_level_planner.clone());
-            self.local_planner.insert(agent_id, local_planner.clone());
-            self.agents.insert(
-                agent_id,
-                Agent {
-                    agent_id: agent_id,
-                    position: *x,
-                    orientation: 0f64,
-                    velocity: Vector2::<f64>::new(0f64, 0f64),
-                    preferred_vel: Vector2::<f64>::new(0f64, 0f64),
-                    angular_vel: 0f64,
-                    next_waypoint: 0usize,
-                    eyesight_range: agent_eyesight_range,
-                },
-            );
-            let success = self.spatial_index.add_or_update(agent_id, *x);
-            if let Err(error_message) = success {
-                return Err(error_message);
-            }
-            res.push(agent_id);
-            for listener in self.event_listeners.registry.values() {
-                listener.lock().unwrap().agent_spawned(*x, agent_id);
-            }
-        }
-        Ok(res)
+        spawn_positions.iter().map(|x| {
+            self.add_agent(
+                *x,
+                high_level_planner.clone(),
+                local_planner.clone(),
+                agent_eyesight_range
+            )
+        }).collect()
     }
 
     /// Adds a source-sink. Returns the id of the source/sink.
@@ -165,6 +225,88 @@ impl<T: SpatialIndex> Simulation<T> {
         // TODO(arjo): Fix this method to remove crowds spawned by
         // registry as well
         self.source_sinks.registry.remove_entry(id);
+    }
+
+    pub fn add_persistent_agent(
+        &mut self,
+        initial_position: Vec2f,
+        goal_radius: f64,
+        high_level_planner: Arc<Mutex<dyn HighLevelPlanner>>,
+        local_planner: Arc<Mutex<dyn LocalPlanner>>,
+        agent_eyesight_range: f64,
+    ) -> Result<usize, String> {
+        let agent_id = self.add_agent(
+            initial_position, high_level_planner, local_planner, agent_eyesight_range
+        )?;
+        self.controller_agent_correspondence.insert(agent_id, Controller::Persistent(
+            Persistent {
+                goal_radius,
+                goal: initial_position,
+                goal_id: 0
+            }
+        ));
+        Ok(agent_id)
+    }
+
+    pub fn persistent_agent_request(
+        &mut self,
+        agent_id: AgentId,
+        goal_location: Point,
+    ) -> Result<usize, String> {
+        match self.controller_agent_correspondence.get_mut(&agent_id) {
+            Some(controller) => {
+                match controller {
+                    Controller::Persistent(persistent) => {
+                        persistent.goal = goal_location;
+                        persistent.goal_id += 1;
+                        Ok(persistent.goal_id)
+                    },
+                    other => {
+                        Err(format!("Invalid controller type for agent {agent_id}: {other:?}"))
+                    }
+                }
+            }
+            None => {
+                Err(format!("Cannot find a controller for agent {agent_id}"))
+            }
+        }
+    }
+
+    pub fn add_obstacle(
+        &mut self,
+        initial_position: Vec2f,
+    ) -> Result<usize, String> {
+        let agent_id = self.add_agent(
+            initial_position,
+            self.no_highlevel_planner.clone(),
+            self.no_local_planner.clone(),
+            0.0,
+        )?;
+        self.controller_agent_correspondence.insert(agent_id, Controller::Obstacle(
+            Obstacle { position: initial_position }
+        ));
+        Ok(agent_id)
+    }
+
+    pub fn update_obstacle(
+        &mut self,
+        agent_id: AgentId,
+        position: Vec2f,
+    ) -> Result<(), String> {
+        match self.controller_agent_correspondence.get_mut(&agent_id) {
+            Some(controller) => {
+                match controller {
+                    Controller::Obstacle(obs) => {
+                        obs.position = position;
+                        Ok(())
+                    }
+                    other => Err(format!("Invalid controller type for agent {agent_id}: {other:?}")),
+                }
+            }
+            None => {
+                Err(format!("Cannot find a controller for agent {agent_id}"))
+            }
+        }
     }
 
     /// Adds an event listener
@@ -184,7 +326,7 @@ impl<T: SpatialIndex> Simulation<T> {
             .remove_agent(agent);
         self.agents.remove_entry(&agent);
         self.update_buffer.remove_entry(&agent);
-        self.source_sink_agent_correspondence.remove_entry(&agent);
+        self.controller_agent_correspondence.remove_entry(&agent);
         self.spatial_index.remove_agent(agent);
         for listener in self.event_listeners.registry.values() {
             listener.lock().unwrap().agent_destroyed(agent);
@@ -193,6 +335,14 @@ impl<T: SpatialIndex> Simulation<T> {
 
     /// This is the main simulation loop. Call to run crowdsim for one iteration.
     pub fn step(&mut self, dur: std::time::Duration) -> Result<(), String> {
+
+        // Update all the obstacle positions, which are determined externally
+        for (agent_id, agent) in &mut self.agents {
+            if let Some(Controller::Obstacle(obstacle)) = self.controller_agent_correspondence.get(agent_id) {
+                agent.position = obstacle.position;
+            }
+        }
+
         // Spawn agents using source sinks.
         // TODO(arjo): lots of unnecessary allocations going on here to keep
         // the borrow checker happy
@@ -206,9 +356,9 @@ impl<T: SpatialIndex> Simulation<T> {
                 let mut agent_spawn_points = vec![];
                 //for i in 0..spawn_number {
                 if spawn_number > 0 {
-                    /// TODO: Remove hard coded constant. Ideally we should have
-                    /// a queue that gets popped if more than one agent is
-                    /// spawned
+                    // TODO: Remove hard coded constant. Ideally we should have
+                    // a queue that gets popped if more than one agent is
+                    // spawned
                     let neighbours = self
                         .spatial_index
                         .get_neighbours_in_radius(0.4, source_sink.source);
@@ -236,8 +386,8 @@ impl<T: SpatialIndex> Simulation<T> {
         for (source_id, agents) in to_add {
             if let Ok(agents) = agents {
                 for agent in agents {
-                    self.source_sink_agent_correspondence
-                        .insert(agent, source_id);
+                    self.controller_agent_correspondence
+                        .insert(agent, Controller::SourceSink(source_id));
 
                     self.high_level_planner[&agent].lock().unwrap().set_target(
                         &self.agents[&agent],
@@ -302,20 +452,20 @@ impl<T: SpatialIndex> Simulation<T> {
             }
 
             // Check if agent belongs to a SourceSink.
-            let source_sink_id = self.source_sink_agent_correspondence.get(agent_id);
-            let mut next_waypoint = agent.next_waypoint;
+            let controller_id = self.controller_agent_correspondence.get(agent_id);
+            let mut next_waypoint = agent.target_waypoint;
 
-            if let Some(source_sink_id) = source_sink_id {
+            if let Some(Controller::SourceSink(source_sink_id)) = controller_id {
                 let source_sink = &self.source_sinks.registry[source_sink_id];
-                if agent.next_waypoint >= source_sink.waypoints.len() {
+                if agent.target_waypoint >= source_sink.waypoints.len() {
                     println!("Rogue agent found.Agent will be terminated. You should not be seeing this printed");
                     to_be_removed.push(*agent_id);
                 }
-                if (agent.position - source_sink.waypoints[agent.next_waypoint]).norm()
+                if (agent.position - source_sink.waypoints[agent.target_waypoint]).norm()
                     < source_sink.radius_sink
                 {
                     println!("Reached waypoint");
-                    if agent.next_waypoint == source_sink.waypoints.len() - 1 {
+                    if agent.target_waypoint == source_sink.waypoints.len() - 1 {
                         if source_sink.loop_forever {
                             next_waypoint = 0usize;
                         } else {
@@ -331,6 +481,32 @@ impl<T: SpatialIndex> Simulation<T> {
                                 source_sink.waypoints[next_waypoint],
                                 Vec2f::new(source_sink.radius_sink, source_sink.radius_sink),
                             );
+                    }
+                }
+            }
+
+            if let Some(Controller::Persistent(persistent)) = controller_id {
+                if agent.target_waypoint < persistent.goal_id {
+                    self.high_level_planner[&agent_id]
+                        .lock()
+                        .unwrap()
+                        .set_target(
+                            &self.agents[&agent_id],
+                            persistent.goal,
+                            Vec2f::new(persistent.goal_radius, persistent.goal_radius),
+                        );
+                    agent.target_waypoint = persistent.goal_id;
+                }
+
+                if agent.target_waypoint == persistent.goal_id {
+                    // Check if the agent has reached the goal. If so, this will
+                    // be the first time that it has reached the goal, so we
+                    // should announce it.
+                    if (agent.position - persistent.goal).norm() <= persistent.goal_radius {
+                        for listener in self.event_listeners.registry.values() {
+                            listener.lock().unwrap().goal_reached(persistent.goal_id, agent.agent_id);
+                        }
+                        agent.target_waypoint = persistent.goal_id;
                     }
                 }
             }
@@ -354,7 +530,7 @@ impl<T: SpatialIndex> Simulation<T> {
             let mut agent = self.agents.get_mut(id).unwrap();
             agent.velocity = state_update.new_vel;
             agent.position = state_update.new_pos;
-            agent.next_waypoint = state_update.next_waypoint;
+            agent.target_waypoint = state_update.next_waypoint;
             state_update.updated = false;
         }
 
