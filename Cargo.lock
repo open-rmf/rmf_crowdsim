@@ -2286,7 +2286,7 @@ dependencies = [
 [[package]]
 name = "rmf_site_format"
 version = "0.0.1"
-source = "git+https://github.com/open-rmf/rmf_site?branch=export_occupancy#35fa660e2f8dbd6887e411682ece5af9f80ed25b"
+source = "git+https://github.com/open-rmf/rmf_site?branch=export_occupancy#6afa508edd9eb104d8ac1b13d1bb61641a6e9a9d"
 dependencies = [
  "glam 0.21.3",
  "optimization_engine",
