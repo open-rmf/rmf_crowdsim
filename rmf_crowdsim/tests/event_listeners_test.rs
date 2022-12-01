@@ -50,7 +50,7 @@ impl MockEventListener {
 }
 
 impl EventListener for MockEventListener {
-    fn agent_spawned(&mut self, position: Vec2f, yaw: f64, agent: AgentId) {
+    fn agent_spawned(&mut self, position: Vec2f, yaw: f64, model: &String, agent: AgentId) {
         self.added.push(agent);
     }
 
@@ -89,6 +89,7 @@ fn test_event_listener_source_sink_api() {
     let source_sink = Arc::new(SourceSink {
         source: Vec2f::new(0f64, 0f64),
         orientation: 0f64,
+        model: "".to_owned(),
         source_range: Vec2f::new(0.0, 0.0),
         waypoints: vec![Vec2f::new(20f64, 0f64)],
         radius_sink: 1f64,

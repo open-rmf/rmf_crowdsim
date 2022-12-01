@@ -81,6 +81,7 @@ fn create_crowd_model(_app: &App) -> SimulationModel<LocationHash2D> {
 
     let res = model.crowd_simulation.add_agents(
         &agent_start_positions,
+        &"".to_owned(),
         high_level_planner,
         local_planner,
         100f64,

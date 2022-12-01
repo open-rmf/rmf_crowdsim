@@ -40,6 +40,9 @@ pub struct SourceSink {
     /// The initial orientation
     pub orientation: f64,
 
+    /// The model spawned by this SourceSink
+    pub model: String,
+
     /// The size of the box in which spawning may happen.
     /// Uniform distribution will be used.
     pub source_range: Vec2f,

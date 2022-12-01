@@ -29,7 +29,7 @@ pub trait EventListener {
     /// Called each time an agent is spawned
     /// TODO(arjo): Is it worth doing this or using a single function call
     /// at the end.
-    fn agent_spawned(&mut self, position: Vec2f, yaw: f64, agent: AgentId);
+    fn agent_spawned(&mut self, position: Vec2f, yaw: f64, model: &String, agent: AgentId);
 
     /// Called each time an agent is destroyed
     fn agent_destroyed(&mut self, agent: AgentId);
@@ -173,6 +173,7 @@ impl<T: SpatialIndex> Simulation<T> {
         &mut self,
         spawn_position: Point,
         spawn_yaw: f64,
+        model: Option<&String>,
         high_level_planner: Arc<Mutex<dyn HighLevelPlanner>>,
         local_planner: Arc<Mutex<dyn LocalPlanner>>,
         agent_eyesight_range: f64,
@@ -199,8 +200,11 @@ impl<T: SpatialIndex> Simulation<T> {
         if let Err(error_message) = success {
             return Err(error_message);
         }
-        for listener in self.event_listeners.registry.values() {
-            listener.lock().unwrap().agent_spawned(spawn_position, spawn_yaw, agent_id);
+
+        if let Some(model) = model {
+            for listener in self.event_listeners.registry.values() {
+                listener.lock().unwrap().agent_spawned(spawn_position, spawn_yaw, model, agent_id);
+            }
         }
         Ok(agent_id)
     }
@@ -209,6 +213,7 @@ impl<T: SpatialIndex> Simulation<T> {
     pub fn add_agents(
         &mut self,
         spawn_positions: &Vec<(Point, f64)>,
+        model: &String,
         high_level_planner: Arc<Mutex<dyn HighLevelPlanner>>,
         local_planner: Arc<Mutex<dyn LocalPlanner>>,
         agent_eyesight_range: f64,
@@ -217,6 +222,7 @@ impl<T: SpatialIndex> Simulation<T> {
             self.add_agent(
                 *p,
                 *yaw,
+                Some(model),
                 high_level_planner.clone(),
                 local_planner.clone(),
                 agent_eyesight_range
@@ -240,13 +246,15 @@ impl<T: SpatialIndex> Simulation<T> {
         &mut self,
         initial_position: Vec2f,
         initial_yaw: f64,
+        model: &String,
         goal_radius: f64,
         high_level_planner: Arc<Mutex<dyn HighLevelPlanner>>,
         local_planner: Arc<Mutex<dyn LocalPlanner>>,
         agent_eyesight_range: f64,
     ) -> Result<usize, String> {
         let agent_id = self.add_agent(
-            initial_position, initial_yaw, high_level_planner, local_planner, agent_eyesight_range
+            initial_position, initial_yaw, Some(model),
+            high_level_planner, local_planner, agent_eyesight_range
         )?;
         self.controller_agent_correspondence.insert(agent_id, Controller::Persistent(
             Persistent {
@@ -290,6 +298,7 @@ impl<T: SpatialIndex> Simulation<T> {
         let agent_id = self.add_agent(
             initial_position,
             initial_yaw,
+            None,
             self.no_highlevel_planner.clone(),
             self.no_local_planner.clone(),
             0.0,
@@ -388,6 +397,7 @@ impl<T: SpatialIndex> Simulation<T> {
             .map(|(source_id, source_sink, agents)| {
                 let agents = self.add_agents(
                     &agents,
+                    &source_sink.model,
                     source_sink.high_level_planner.clone(),
                     source_sink.local_planner.clone(),
                     source_sink.agent_eyesight_range,
@@ -644,6 +654,7 @@ mod tests {
 
         let agents = crowd_simulation.add_agents(
             &agent_start_positions,
+            &"".to_owned(),
             high_level_planner,
             local_planner,
             100f64,
