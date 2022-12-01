@@ -68,9 +68,9 @@ fn create_crowd_model(_app: &App) -> SimulationModel<LocationHash2D> {
     };
 
     let agent_start_positions = vec![
-        Point::new(100f64, 100f64),
-        Point::new(100f64, -100f64),
-        Point::new(60f64, 100f64),
+        (Point::new(100f64, 100f64), 0f64),
+        (Point::new(100f64, -100f64), 0f64),
+        (Point::new(60f64, 100f64), 0f64),
     ];
 
     let speed = Vec2f::new(0f64, 10f64);

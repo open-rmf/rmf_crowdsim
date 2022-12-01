@@ -29,7 +29,7 @@ pub trait EventListener {
     /// Called each time an agent is spawned
     /// TODO(arjo): Is it worth doing this or using a single function call
     /// at the end.
-    fn agent_spawned(&mut self, position: Vec2f, agent: AgentId);
+    fn agent_spawned(&mut self, position: Vec2f, yaw: f64, agent: AgentId);
 
     /// Called each time an agent is destroyed
     fn agent_destroyed(&mut self, agent: AgentId);
@@ -58,7 +58,8 @@ pub struct Agent {
     pub agent_id: AgentId,
     /// Position of a point
     pub position: Point,
-    /// Orientation of agent
+    /// Orientation of agent. Calculated based on velocity. When velocity is 0,
+    /// this simply remains unchanged.
     pub orientation: f64,
     /// Velocity of agent
     pub velocity: Vector2<f64>,
@@ -165,6 +166,7 @@ impl<T: SpatialIndex> Simulation<T> {
     pub fn add_agent(
         &mut self,
         spawn_position: Point,
+        spawn_yaw: f64,
         high_level_planner: Arc<Mutex<dyn HighLevelPlanner>>,
         local_planner: Arc<Mutex<dyn LocalPlanner>>,
         agent_eyesight_range: f64,
@@ -177,9 +179,9 @@ impl<T: SpatialIndex> Simulation<T> {
         self.agents.insert(
             agent_id,
             Agent {
-                agent_id: agent_id,
+                agent_id,
                 position: spawn_position,
-                orientation: 0f64,
+                orientation: spawn_yaw,
                 velocity: Vector2::<f64>::new(0f64, 0f64),
                 preferred_vel: Vector2::<f64>::new(0f64, 0f64),
                 angular_vel: 0f64,
@@ -192,7 +194,7 @@ impl<T: SpatialIndex> Simulation<T> {
             return Err(error_message);
         }
         for listener in self.event_listeners.registry.values() {
-            listener.lock().unwrap().agent_spawned(spawn_position, agent_id);
+            listener.lock().unwrap().agent_spawned(spawn_position, spawn_yaw, agent_id);
         }
         Ok(agent_id)
     }
@@ -200,14 +202,15 @@ impl<T: SpatialIndex> Simulation<T> {
     /// Adds a group of agents
     pub fn add_agents(
         &mut self,
-        spawn_positions: &Vec<Point>,
+        spawn_positions: &Vec<(Point, f64)>,
         high_level_planner: Arc<Mutex<dyn HighLevelPlanner>>,
         local_planner: Arc<Mutex<dyn LocalPlanner>>,
         agent_eyesight_range: f64,
     ) -> Result<Vec<AgentId>, String> {
-        spawn_positions.iter().map(|x| {
+        spawn_positions.iter().map(|(p, yaw)| {
             self.add_agent(
-                *x,
+                *p,
+                *yaw,
                 high_level_planner.clone(),
                 local_planner.clone(),
                 agent_eyesight_range
@@ -230,13 +233,14 @@ impl<T: SpatialIndex> Simulation<T> {
     pub fn add_persistent_agent(
         &mut self,
         initial_position: Vec2f,
+        initial_yaw: f64,
         goal_radius: f64,
         high_level_planner: Arc<Mutex<dyn HighLevelPlanner>>,
         local_planner: Arc<Mutex<dyn LocalPlanner>>,
         agent_eyesight_range: f64,
     ) -> Result<usize, String> {
         let agent_id = self.add_agent(
-            initial_position, high_level_planner, local_planner, agent_eyesight_range
+            initial_position, initial_yaw, high_level_planner, local_planner, agent_eyesight_range
         )?;
         self.controller_agent_correspondence.insert(agent_id, Controller::Persistent(
             Persistent {
@@ -275,9 +279,11 @@ impl<T: SpatialIndex> Simulation<T> {
     pub fn add_obstacle(
         &mut self,
         initial_position: Vec2f,
+        initial_yaw: f64,
     ) -> Result<usize, String> {
         let agent_id = self.add_agent(
             initial_position,
+            initial_yaw,
             self.no_highlevel_planner.clone(),
             self.no_local_planner.clone(),
             0.0,
@@ -346,7 +352,7 @@ impl<T: SpatialIndex> Simulation<T> {
         // Spawn agents using source sinks.
         // TODO(arjo): lots of unnecessary allocations going on here to keep
         // the borrow checker happy
-        let to_add: Vec<(usize, Arc<SourceSink>, Vec<Vec2f>)> = self
+        let to_add: Vec<(usize, Arc<SourceSink>, Vec<(Vec2f, f64)>)> = self
             .source_sinks
             .registry
             .iter()
@@ -362,7 +368,7 @@ impl<T: SpatialIndex> Simulation<T> {
                     let p = source_sink.spawn();
                     let neighbours = self
                         .spatial_index
-                        .get_neighbours_in_radius(0.4, p);
+                        .get_neighbours_in_radius(0.4, p.0);
                     if neighbours.len() == 0 {
                         agent_spawn_points.push(p);
                     }
@@ -446,6 +452,10 @@ impl<T: SpatialIndex> Simulation<T> {
             let dx = vel * dur.as_secs_f64();
             let pos = agent.position;
             let new_pos = pos + dx;
+
+            if vel.norm() > 1e-2 {
+                agent.orientation = vel[1].atan2(vel[0]);
+            }
 
             let success = self.spatial_index.add_or_update(*agent_id, new_pos);
             if let Err(error_message) = success {
@@ -607,7 +617,7 @@ mod tests {
             Point::new(-500f64, -500f64),
         );
         let mut crowd_simulation = Simulation::new(stub_spatial);
-        let agent_start_positions = vec![Point::new(0f64, 0f64)];
+        let agent_start_positions = vec![(Point::new(0f64, 0f64), 0.0)];
         let high_level_planner = Arc::new(Mutex::new(StubHighLevelPlan::new(velocity)));
         let local_planner = Arc::new(Mutex::new(local_planners::no_local_plan::NoLocalPlan {}));
 

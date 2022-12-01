@@ -37,6 +37,9 @@ pub struct SourceSink {
     /// The source location
     pub source: Vec2f,
 
+    /// The initial orientation
+    pub orientation: f64,
+
     /// The size of the box in which spawning may happen.
     /// Uniform distribution will be used.
     pub source_range: Vec2f,
@@ -64,9 +67,9 @@ pub struct SourceSink {
 }
 
 impl SourceSink {
-    pub fn spawn(&self) -> Vec2f {
+    pub fn spawn(&self) -> (Vec2f, f64) {
         if self.source_range[0] <= 0.0 && self.source_range[1] <= 0.0 {
-            return self.source;
+            return (self.source, self.orientation);
         }
 
         let mut rng = rand::thread_rng();
@@ -83,7 +86,7 @@ impl SourceSink {
             Uniform::from(-range_y..range_y).sample(&mut rng)
         };
 
-        self.source + Vec2f::new(dx, dy)
+        (self.source + Vec2f::new(dx, dy), self.orientation)
     }
 }
 
