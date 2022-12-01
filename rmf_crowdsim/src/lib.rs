@@ -34,6 +34,12 @@ pub trait EventListener {
     /// Called each time an agent is destroyed
     fn agent_destroyed(&mut self, agent: AgentId);
 
+    /// Triggered when an agent stops moving
+    fn agent_idle(&mut self, agent: AgentId);
+
+    /// Triggered when an agent begins or resumes moving
+    fn agent_moving(&mut self, agent: AgentId);
+
     /// Waypoint reached
     fn waypoint_reached(&mut self, position: Vec2f, agent: AgentId) {}
 
@@ -453,10 +459,6 @@ impl<T: SpatialIndex> Simulation<T> {
             let pos = agent.position;
             let new_pos = pos + dx;
 
-            if vel.norm() > 1e-2 {
-                agent.orientation = vel[1].atan2(vel[0]);
-            }
-
             let success = self.spatial_index.add_or_update(*agent_id, new_pos);
             if let Err(error_message) = success {
                 return Err(error_message);
@@ -538,11 +540,28 @@ impl<T: SpatialIndex> Simulation<T> {
             if !state_update.updated {
                 continue;
             }
+            let minimum_speed: f64 = 1e-2;
             let mut agent = self.agents.get_mut(id).unwrap();
+            let was_idle = agent.velocity.norm() < minimum_speed;
+            let is_idle = state_update.new_vel.norm() < minimum_speed;
             agent.velocity = state_update.new_vel;
             agent.position = state_update.new_pos;
             agent.target_waypoint = state_update.next_waypoint;
             state_update.updated = false;
+
+            if !is_idle {
+                agent.orientation = agent.velocity[1].atan2(agent.velocity[0]);
+            }
+
+            if was_idle != is_idle {
+                for listener in self.event_listeners.registry.values() {
+                    if is_idle {
+                        listener.lock().unwrap().agent_idle(*id);
+                    } else {
+                        listener.lock().unwrap().agent_moving(*id);
+                    }
+                }
+            }
         }
 
         // Remove agents (old)

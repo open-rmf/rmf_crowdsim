@@ -59,6 +59,14 @@ impl EventListener for MockEventListener {
         println!("Removed {}", agent);
         self.removed.push(agent);
     }
+
+    fn agent_idle(&mut self, agent: AgentId) {
+        println!("{agent} idle");
+    }
+
+    fn agent_moving(&mut self, agent: AgentId) {
+        println!("{agent} moving")
+    }
 }
 
 #[test]
