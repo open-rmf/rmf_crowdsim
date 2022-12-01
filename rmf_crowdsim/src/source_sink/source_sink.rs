@@ -40,6 +40,9 @@ pub struct SourceSink {
     /// The initial orientation
     pub orientation: f64,
 
+    /// Prefix for naming agents from this source/sink
+    pub prefix: String,
+
     /// The model spawned by this SourceSink
     pub model: String,
 
