@@ -82,6 +82,8 @@ pub struct Agent {
     /// of the goal, this becomes goal_id+1 but the agent will continue to use
     /// that goal_id as its goal until a goal_id+1 is assigned.
     pub target_waypoint: usize,
+    /// Has the agent already reached its current goal (only used for persistent agents)
+    pub reached: bool,
     /// Eyesight range: How far each individual agent can "see"
     /// TODO(arjo): Replace with "Agent Property" hashmap.
     pub eyesight_range: f64,
@@ -207,6 +209,7 @@ impl<T: SpatialIndex> Simulation<T> {
                 preferred_vel: Vector2::<f64>::new(0f64, 0f64),
                 angular_vel: 0f64,
                 target_waypoint: 0usize,
+                reached: true,
                 eyesight_range: agent_eyesight_range,
             },
         );
@@ -536,17 +539,18 @@ impl<T: SpatialIndex> Simulation<T> {
                             Vec2f::new(persistent.goal_radius, persistent.goal_radius),
                         );
                     agent.target_waypoint = persistent.goal_id;
+                    agent.reached = false;
                 }
 
-                if agent.target_waypoint == persistent.goal_id {
+                if agent.target_waypoint == persistent.goal_id && !agent.reached {
                     // Check if the agent has reached the goal. If so, this will
                     // be the first time that it has reached the goal, so we
                     // should announce it.
                     if (agent.position - persistent.goal).norm() <= persistent.goal_radius {
+                        agent.reached = true;
                         for listener in self.event_listeners.registry.values() {
                             listener.lock().unwrap().goal_reached(persistent.goal_id, agent.agent_id);
                         }
-                        agent.target_waypoint = persistent.goal_id;
                     }
                 }
             }
