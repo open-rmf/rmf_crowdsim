@@ -8,25 +8,19 @@ use std::sync::Arc;
 
 use nalgebra::Vector2;
 
-use mapf::expander::Constrainable;
-use mapf::occupancy::{Cell, Grid, Point, SparseGrid, Visibility, VisibilityGraph};
 use mapf::{
-    a_star,
-    algorithm::Status,
-    directed::simple::SimpleGraph,
-    motion::{
-        graph_search::Expander,
-        r2::{
-            direct_travel::DirectTravelHeuristic,
-            graph_search::{LinearR2Policy, Node, TimeInvariantExpander},
-            timed_position::LineFollow,
-        },
-        reach::NoReach,
-        trajectory::DurationCostCalculator,
-        Motion, Trajectory,
+    algorithm::AStarConnect,
+    graph::{
+        occupancy::{Cell, Grid, Point, SparseGrid, Visibility, VisibilityGraph},
+        SharedGraph,
     },
-    node::PartialKeyedClosedSet,
-    planner::make_planner,
+    algorithm::SearchStatus,
+    motion::{
+        Trajectory,
+        r2::{LineFollow, WaypointR2},
+    },
+    premade::SearchR2,
+    Planner,
 };
 
 use crate::Agent;
@@ -35,31 +29,6 @@ use crate::Vec2f;
 
 use crate::highlevel_planners::highlevel_planners::HighLevelPlanner;
 
-type DefaultExpander = TimeInvariantExpander<
-    VisibilityGraph<SparseGrid>,
-    DurationCostCalculator,
-    DirectTravelHeuristic<VisibilityGraph<SparseGrid>, DurationCostCalculator>,
->;
-
-fn make_default_expander(
-    graph: Arc<VisibilityGraph<SparseGrid>>,
-    extrapolator: Arc<LineFollow>,
-) -> DefaultExpander {
-    let cost_calculator = Arc::new(DurationCostCalculator);
-    let heuristic = Arc::new(DirectTravelHeuristic {
-        graph: graph.clone(),
-        cost_calculator: cost_calculator.clone(),
-        extrapolator: (*extrapolator).clone(),
-    });
-
-    DefaultExpander {
-        graph,
-        extrapolator,
-        cost_calculator,
-        heuristic,
-        reacher: Arc::new(NoReach),
-    }
-}
 ////////////////////////////////////////////////////////////////////////////////
 /// SpatialHash used for caching later on
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -164,31 +133,29 @@ impl RMFPlanner {
         let start_cell = Cell::from_point(start_pos, self.scale);
         let end_cell = Cell::from_point(end_pos, self.scale);
 
-        let graph = Arc::new(VisibilityGraph::new(
+        let graph = SharedGraph::new(VisibilityGraph::new(
             self.visibility_graph.clone(),
             [start_cell, end_cell].into_iter(),
         ));
 
-        let expander = make_default_expander(graph, Arc::new(LineFollow::new(1.0f64).unwrap()));
-        let planner = make_planner(Arc::new(expander), Arc::new(a_star::Algorithm));
-        let mut progress = planner.plan(&start_cell, end_cell).unwrap();
+        let planner = Planner::new(AStarConnect(
+            SearchR2::new_r2(graph, LineFollow::new(1.0f64).unwrap())
+        ));
+        let search = planner.plan(start_cell, end_cell);
 
-        match progress.solve().unwrap() {
-            Status::Solved(solution) => {
-                let mut waypoints = vec![];
-                let motion = solution.motion().as_ref().unwrap();
-                for waypoint in motion.iter() {
-                    waypoints.push(Vec2f::new(waypoint.position.x, waypoint.position.y));
-                }
-                return Some(waypoints);
-            }
-            Status::Impossible => {
-                return None;
-            }
-            Status::Incomplete => {
-                return None;
-            }
-        }
+        search.ok().map(|mut s| s.solve().ok().map(|s| s.solution()).flatten()).flatten()
+        .map(|solution| {
+            let trajecory: Option<Trajectory<WaypointR2>> = solution.make_trajectory().ok()
+                .map(|t| t.map(|t| t.trajectory))
+                .flatten();
+
+            let result: Option<Vec<Vec2f>> = trajecory.map(|t| {
+                t.iter().map(|wp| wp.position.coords).collect()
+            });
+
+            result
+        })
+        .flatten()
     }
 }
 

@@ -714,6 +714,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "float-ord"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ce81f49ae8a0482e4c55ea62ebbd7e5a686af544c00b9d090bba3ff9be97b3d"
+
+[[package]]
 name = "float_next_after"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1293,18 +1299,23 @@ dependencies = [
 [[package]]
 name = "mapf"
 version = "0.1.1"
-source = "git+https://github.com/open-rmf/mapf.git?tag=v0.1.1#cf9f4ebe42ccb1f9c920324ac0aab40f749c68ba"
+source = "git+https://github.com/open-rmf/mapf?branch=main#e910cfac491b25c9ab270c4c63578f3f503e8fea"
 dependencies = [
  "anyhow",
- "approx 0.5.1",
  "arrayvec 0.7.2",
  "bitfield",
  "cached",
  "derivative",
+ "float-ord",
  "nalgebra 0.31.4",
  "num",
  "num-complex",
- "simba 0.7.3",
+ "paste 0.1.18",
+ "serde",
+ "serde_yaml",
+ "simba 0.5.1",
+ "slotmap",
+ "smallvec",
  "sorted-vec",
  "thiserror",
  "time-point",
@@ -1916,9 +1927,28 @@ dependencies = [
 
 [[package]]
 name = "paste"
+version = "0.1.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45ca20c77d80be666aef2b45486da86238fabe33e38306bd3118fe4af33fa880"
+dependencies = [
+ "paste-impl",
+ "proc-macro-hack",
+]
+
+[[package]]
+name = "paste"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d01a5bd0424d00070b0098dd17ebca6f961a959dead1dbcbbbc1d1cd8d3deeba"
+
+[[package]]
+name = "paste-impl"
+version = "0.1.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d95a7db200b97ef370c8e6de0088252f7e0dfff7d047a28528e47456c0fc98b6"
+dependencies = [
+ "proc-macro-hack",
+]
 
 [[package]]
 name = "pennereq"
@@ -2022,6 +2052,12 @@ dependencies = [
  "thiserror",
  "toml",
 ]
+
+[[package]]
+name = "proc-macro-hack"
+version = "0.5.20+deprecated"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
 
 [[package]]
 name = "proc-macro2"
@@ -2354,6 +2390,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_yaml"
+version = "0.9.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9d684e3ec7de3bf5466b32bd75303ac16f0736426e5a4e0d6e489559ce1249c"
+dependencies = [
+ "indexmap",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml",
+]
+
+[[package]]
 name = "sid"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2371,7 +2420,7 @@ dependencies = [
  "approx 0.5.1",
  "num-complex",
  "num-traits 0.2.15",
- "paste",
+ "paste 1.0.11",
 ]
 
 [[package]]
@@ -2383,7 +2432,7 @@ dependencies = [
  "approx 0.5.1",
  "num-complex",
  "num-traits 0.2.15",
- "paste",
+ "paste 1.0.11",
  "wide",
 ]
 
@@ -2432,8 +2481,9 @@ dependencies = [
 
 [[package]]
 name = "sorted-vec"
-version = "0.8.1"
-source = "git+https://gitlab.com/grey12/sorted-vec?branch=master#80930c226f6552a4d66346176f9db62ee5aea1ee"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0047b8207660638866f228b4b4147e98cc8efb190a70cd63d5cb899a4a539a8"
 
 [[package]]
 name = "spin"
@@ -2620,6 +2670,12 @@ name = "unicode-width"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0edd1e5b14653f783770bce4a4dabb4a5108a5370a5f5d8cfe8710c361f6c8b"
+
+[[package]]
+name = "unsafe-libyaml"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1865806a559042e51ab5414598446a5871b561d21b6764f2eabb0dd481d880a6"
 
 [[package]]
 name = "version_check"
